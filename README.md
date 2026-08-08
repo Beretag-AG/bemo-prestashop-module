@@ -9,9 +9,10 @@ merchant's own storefront.
 
 > [!IMPORTANT]
 > This module is under active development and is not ready for production
-> shops yet. The current version provides the installation, configuration,
-> credential, and packaging foundation. Account pairing, event delivery, and
-> the customer purchase flow are still being completed.
+> shops yet. The current version provides installation, configuration,
+> credential provisioning, and the module side of account pairing. The BEMO
+> claim screen, event delivery, and customer purchase flow are still being
+> completed.
 
 ## Requirements
 
@@ -34,6 +35,8 @@ installing this module. PrestaShop 9 is not supported by the current release.
   permissions BEMO needs.
 - Generates independent secrets for account pairing, outbound events, and
   signed purchase links.
+- Starts a short-lived BEMO pairing handoff and redirects the administrator to
+  the configured BEMO application without rendering or logging credentials.
 - Removes only module-owned Webservice accounts during uninstall, including in
   multistore installations.
 - Produces a deterministic ZIP that can be uploaded through Module Manager.
@@ -57,8 +60,9 @@ To install it in a development or staging shop:
 2. Select **Upload a module**.
 3. Upload `bemoliveshopping.zip`.
 4. Open **BEMO Live Shopping → Configure**.
-5. Enter the BEMO API URL for the environment.
-6. Review the Webservice notice and explicitly provision read-only access.
+5. Confirm the production BEMO endpoints. Custom endpoints are available only
+   when PrestaShop developer mode is enabled.
+6. Review the Webservice notice and explicitly activate the BEMO account.
 
 Do not test an unreleased build on a production shop.
 
@@ -105,18 +109,20 @@ composer install
 ```
 
 The initializer copies optional `.env` and `.env.local` files from the primary
-checkout. It is safe to rerun and does nothing when invoked from the primary
-checkout.
+checkout, skips files that already exist, and does nothing in the primary
+checkout. Use `scripts/init-worktree --force` only when you intentionally want
+to replace existing local files.
 
 ## Security
 
-- PrestaShop Webservice access is limited to `GET` and `HEAD` on required
+- PrestaShop Webservice access is limited to `GET` on required
   catalog resources.
 - Customer and order data are not exposed through the Webservice account.
 - Pairing, webhook, and purchase-link secrets are generated independently.
 - Secrets are never rendered back into Back Office pages or written to logs.
-- HTTPS is required for remote BEMO endpoints; plain HTTP is accepted only for
-  local development.
+- Production credentials can be sent only to `https://actions.bemo.now` and
+  redirect only to `https://bemo.now`. Developer-mode overrides still require
+  HTTPS, except for explicit localhost URLs.
 - Uninstall never disables the shop-wide Webservice setting because another
   integration may depend on it.
 

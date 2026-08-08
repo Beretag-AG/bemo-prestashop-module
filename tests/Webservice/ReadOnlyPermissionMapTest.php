@@ -7,14 +7,14 @@ use PHPUnit\Framework\TestCase;
 
 class ReadOnlyPermissionMapTest extends TestCase
 {
-    public function testGrantsOnlyGetAndHeadForTheRequiredResources()
+    public function testGrantsOnlyGetForTheResourcesTheProviderReads()
     {
         $permissions = (new ReadOnlyPermissionMap())->build();
 
         self::assertSame(ReadOnlyPermissionMap::RESOURCES, array_keys($permissions));
 
         foreach ($permissions as $methods) {
-            self::assertSame(array('GET' => true, 'HEAD' => true), $methods);
+            self::assertSame(array('GET' => true), $methods);
         }
 
         self::assertArrayNotHasKey('orders', $permissions);

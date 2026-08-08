@@ -37,6 +37,34 @@ class PrestaShopWebserviceGateway implements WebserviceGatewayInterface
         return (int) $account->id;
     }
 
+    public function isAccountValid($accountId, $shopId, $key, array $permissions)
+    {
+        $account = new \WebserviceKey((int) $accountId);
+        if (!\Validate::isLoadedObject($account)
+            || !hash_equals((string) $account->key, (string) $key)
+            || !\WebserviceKey::isKeyActive((string) $key)) {
+            return false;
+        }
+
+        $shops = array_values(array_map('intval', $account->getAssociatedShops()));
+        sort($shops);
+        if ($shops !== array((int) $shopId)) {
+            return false;
+        }
+
+        $actual = \WebserviceKey::getPermissionForAccount((string) $key);
+        if (!is_array($actual) || count($actual) !== count($permissions)) {
+            return false;
+        }
+        foreach ($permissions as $resource => $methods) {
+            if (!isset($actual[$resource]) || !$this->sameEnabledMethods($actual[$resource], $methods)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public function deleteAccount($accountId)
     {
         $account = new \WebserviceKey((int) $accountId);
@@ -60,5 +88,27 @@ class PrestaShopWebserviceGateway implements WebserviceGatewayInterface
                 'Required Webservice resources are unavailable: ' . implode(', ', $missingResources)
             );
         }
+    }
+
+    private function sameEnabledMethods(array $actual, array $required)
+    {
+        $actualEnabled = array();
+        foreach ($actual as $method => $enabled) {
+            if (is_int($method) && is_string($enabled)) {
+                $actualEnabled[] = strtoupper($enabled);
+            } elseif ($enabled) {
+                $actualEnabled[] = strtoupper($method);
+            }
+        }
+        $requiredEnabled = array();
+        foreach ($required as $method => $enabled) {
+            if ($enabled) {
+                $requiredEnabled[] = strtoupper($method);
+            }
+        }
+        sort($actualEnabled);
+        sort($requiredEnabled);
+
+        return $actualEnabled === $requiredEnabled;
     }
 }

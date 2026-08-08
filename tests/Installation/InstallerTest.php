@@ -1,0 +1,63 @@
+<?php
+
+namespace Bemo\LiveShopping\Tests\Installation;
+
+use Bemo\LiveShopping\Installation\Installer;
+use PHPUnit\Framework\TestCase;
+
+class InstallerTest extends TestCase
+{
+    public function testFreshInstallIncludesTheBemoAppUrl()
+    {
+        $db = new InstallerDb();
+
+        self::assertTrue((new Installer($db))->install());
+        self::assertStringContainsString('`app_base_url` VARCHAR(255)', $db->executed[0]);
+        self::assertStringContainsString('https://bemo.now', $db->executed[0]);
+        self::assertStringContainsString('https://actions.bemo.now', $db->executed[0]);
+        self::assertStringContainsString('`credentials_api_base_url`', $db->executed[0]);
+        self::assertStringContainsString('`pairing_expires_at`', $db->executed[0]);
+    }
+
+    public function testUpgradeAddsCredentialOriginAndPairingExpiry()
+    {
+        $db = new InstallerDb();
+
+        self::assertTrue((new Installer($db))->upgradeToVersion030());
+        self::assertStringContainsString('credentials_api_base_url', $db->executed[0]);
+        self::assertStringContainsString('pairing_expires_at', $db->executed[1]);
+        self::assertStringContainsString('actions.bemo.now', $db->executed[2]);
+    }
+
+    public function testUpgradeAddsTheAppUrlColumnOnce()
+    {
+        $db = new InstallerDb();
+        $installer = new Installer($db);
+
+        self::assertTrue($installer->upgradeToVersion020());
+        self::assertCount(1, $db->executed);
+        self::assertStringContainsString('ALTER TABLE', $db->executed[0]);
+
+        $db->columns = array(array('Field' => 'app_base_url'));
+        self::assertTrue($installer->upgradeToVersion020());
+        self::assertCount(1, $db->executed);
+    }
+}
+
+class InstallerDb
+{
+    public $columns = array();
+    public $executed = array();
+
+    public function execute($sql)
+    {
+        $this->executed[] = $sql;
+
+        return true;
+    }
+
+    public function executeS($sql)
+    {
+        return $this->columns;
+    }
+}

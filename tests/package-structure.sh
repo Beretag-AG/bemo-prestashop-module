@@ -15,7 +15,11 @@ for required in \
   bemoliveshopping/.htaccess \
   bemoliveshopping/config.xml \
   bemoliveshopping/LICENSE.md \
-  bemoliveshopping/config/autoload.php; do
+  bemoliveshopping/config/autoload.php \
+  bemoliveshopping/src/Pairing/index.php \
+  bemoliveshopping/upgrade/index.php \
+  bemoliveshopping/upgrade/upgrade-0.2.0.php \
+  bemoliveshopping/upgrade/upgrade-0.3.0.php; do
   if ! grep -Fx "$required" <<<"$entries" >/dev/null; then
     echo "Archive is missing $required." >&2
     exit 1
@@ -28,5 +32,12 @@ for excluded in tests/ docs/ .github/; do
     exit 1
   fi
 done
+
+while IFS= read -r php_entry; do
+  if ! unzip -p "$artifact" "$php_entry" | grep -F "defined('_PS_VERSION_')" >/dev/null; then
+    echo "Packaged PHP file is missing the PrestaShop context guard: $php_entry" >&2
+    exit 1
+  fi
+done < <(grep -E '\.php$' <<<"$entries")
 
 echo "Package structure is valid: $artifact"

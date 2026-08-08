@@ -42,24 +42,42 @@ or optional-capability work. They do not block this module foundation.
 - Link-out checkout is the guaranteed purchase mode. Embedding is an optional
   capability earned by separate browser and merchant acceptance tests.
 
-## Proposed pairing request
+## Pairing request
 
-The endpoint is not live on BEMO `staging`. BEMO-360 must settle the final URL
-and response before this client is enabled.
+The module client follows the BEMO `staging` contract introduced by BEMO
+commit `5adaea93`. The API base URL and browser app base URL are configured
+separately because the HTTP action runs on the Convex site domain while the
+merchant claims the connection in the BEMO web application.
 
 ```json
 {
   "pairingToken": "base64url-128-bit-token",
   "shopUrl": "https://merchant.example",
   "platformVersion": "8.1.7",
-  "phpVersion": "8.1.0",
-  "languages": [{ "id": 1, "isoCode": "en" }],
-  "currencies": [{ "id": 1, "isoCode": "EUR" }],
+  "languageId": 1,
+  "languages": ["en"],
+  "currencies": ["EUR"],
   "webserviceKey": "32-character-key",
   "webhookSecret": "shop-to-bemo-secret",
   "buyLinkSecret": "bemo-to-shop-secret"
 }
 ```
+
+Successful starts return HTTP `201` with an epoch-millisecond expiry:
+
+```json
+{
+  "expiresAt": 1786200000000
+}
+```
+
+The module then redirects to
+`{appBaseUrl}/settings/creator/integrations?pair={pairingToken}`. The token is a
+short-lived, single-use authorization code. BEMO applies `Referrer-Policy:
+no-referrer` while it is in the URL and removes it with a history replacement
+after a successful claim. Ambiguous network and rate-limit failures reuse the
+same token and payload; BEMO returns the original expiry for that exact retry.
+Definitive rejection clears the local attempt before a fresh token is created.
 
 The future contract suite must include JSON fixtures for pairing and every
 webhook event, plus golden HMAC vectors containing exact raw body bytes and
@@ -67,19 +85,13 @@ expected signatures.
 
 ## Webservice permission contract
 
-Only `GET` and `HEAD` are provisioned for:
+Only `GET` is provisioned for:
 
 - `products`
 - `combinations`
 - `stock_availables`
 - `specific_prices`
 - `cart_rules`
-- `images`
-- `languages`
-- `currencies`
-- `shops`
-- `taxes`
-- `tax_rules`
 
 `orders` is deliberately excluded. Current sales-light policy counts checkout
 intent instead of pretending pushed order events form a reconciled revenue

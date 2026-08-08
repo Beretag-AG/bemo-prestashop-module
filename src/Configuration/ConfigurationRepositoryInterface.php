@@ -10,18 +10,32 @@ interface ConfigurationRepositoryInterface
 {
     public function getApiBaseUrl($shopId);
 
-    public function saveApiBaseUrl($shopId, $apiBaseUrl);
+    public function getAppBaseUrl($shopId);
+
+    public function saveEndpoints($shopId, $apiBaseUrl, $appBaseUrl);
 
     public function getWebserviceAccountId($shopId);
 
     public function getWebserviceAccountIds();
 
+    public function getPairingCredentials($shopId);
+
+    public function getPairingAttempt($shopId);
+
+    public function beginPairingAttempt($shopId, $pairingToken);
+
+    public function markPairingStarted($shopId, $pairingToken, $expiresAt);
+
+    public function clearPairingAttempt($shopId, $pairingToken);
+
+    public function clearProvisionedCredentials($shopId);
+
     public function saveProvisionedCredentials(
         $shopId,
         $webserviceAccountId,
         $webserviceKey,
-        $pairingToken,
         $webhookSecret,
-        $buyLinkSecret
+        $buyLinkSecret,
+        $apiBaseUrl
     );
 }

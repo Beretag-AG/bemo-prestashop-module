@@ -3,6 +3,7 @@
 namespace Bemo\LiveShopping\Tests\Setup;
 
 use Bemo\LiveShopping\Configuration\ConfigurationRepositoryInterface;
+use Bemo\LiveShopping\Lock\ShopLockInterface;
 use Bemo\LiveShopping\Security\SecretGenerator;
 use Bemo\LiveShopping\Setup\ConnectionSetupService;
 use Bemo\LiveShopping\Webservice\ReadOnlyPermissionMap;
@@ -11,29 +12,42 @@ use PHPUnit\Framework\TestCase;
 
 class ConnectionSetupServiceTest extends TestCase
 {
-    public function testProvisioningIsIdempotentForAnExistingAccount()
+    public function testHealthyProvisioningIsIdempotentAndValidated()
     {
         $configuration = new InMemoryConfigurationRepository();
         $configuration->accountId = 42;
+        $configuration->credentials = $this->credentials();
         $webservice = new FakeWebserviceGateway();
-        $service = $this->service($configuration, $webservice);
 
-        self::assertSame(42, $service->provision(7));
+        self::assertSame(42, $this->service($configuration, $webservice)->provision(7, 'https://actions.bemo.now'));
+        self::assertSame(1, $webservice->validationCalls);
         self::assertSame(0, $webservice->createCalls);
     }
 
-    public function testProvisioningPersistsSeparateSecretsAndReadOnlyPermissions()
+    public function testStaleProvisioningIsDeletedClearedAndRecreated()
+    {
+        $configuration = new InMemoryConfigurationRepository();
+        $configuration->accountId = 42;
+        $configuration->credentials = $this->credentials();
+        $webservice = new FakeWebserviceGateway();
+        $webservice->valid = false;
+
+        self::assertSame(73, $this->service($configuration, $webservice)->provision(7, 'https://actions.bemo.now'));
+        self::assertSame(array(42), $webservice->deletedAccountIds);
+        self::assertSame(1, $configuration->clearCalls);
+        self::assertSame(1, $webservice->createCalls);
+    }
+
+    public function testProvisioningPersistsOriginBoundSeparateSecretsAndMinimalPermissions()
     {
         $configuration = new InMemoryConfigurationRepository();
         $webservice = new FakeWebserviceGateway();
-        $service = $this->service($configuration, $webservice);
 
-        self::assertSame(73, $service->provision(7));
+        self::assertSame(73, $this->service($configuration, $webservice)->provision(7, 'https://actions.bemo.now'));
         self::assertTrue($webservice->enabled);
-        self::assertSame(7, $webservice->shopId);
-        self::assertSame(32, strlen($webservice->createdKey));
         self::assertSame((new ReadOnlyPermissionMap())->build(), $webservice->permissions);
         self::assertNotSame($configuration->webhookSecret, $configuration->buyLinkSecret);
+        self::assertSame('https://actions.bemo.now', $configuration->credentialsApiBaseUrl);
     }
 
     public function testProvisioningDeletesTheExactAccountWhenPersistenceFails()
@@ -41,14 +55,23 @@ class ConnectionSetupServiceTest extends TestCase
         $configuration = new InMemoryConfigurationRepository();
         $configuration->saveSucceeds = false;
         $webservice = new FakeWebserviceGateway();
-        $service = $this->service($configuration, $webservice);
 
         try {
-            $service->provision(7);
+            $this->service($configuration, $webservice)->provision(7, 'https://actions.bemo.now');
             self::fail('Expected provisioning to fail.');
         } catch (\RuntimeException $exception) {
             self::assertSame(array(73), $webservice->deletedAccountIds);
         }
+    }
+
+    private function credentials()
+    {
+        return array(
+            'webservice_key' => str_repeat('k', 32),
+            'webhook_secret' => str_repeat('w', 32),
+            'buy_link_secret' => str_repeat('b', 32),
+            'credentials_api_base_url' => 'https://actions.bemo.now',
+        );
     }
 
     private function service($configuration, $webservice)
@@ -57,7 +80,8 @@ class ConnectionSetupServiceTest extends TestCase
             $configuration,
             $webservice,
             new ReadOnlyPermissionMap(),
-            new SecretGenerator()
+            new SecretGenerator(),
+            new ImmediateShopLock()
         );
     }
 }
@@ -65,41 +89,37 @@ class ConnectionSetupServiceTest extends TestCase
 class InMemoryConfigurationRepository implements ConfigurationRepositoryInterface
 {
     public $accountId;
+    public $credentials;
     public $saveSucceeds = true;
+    public $clearCalls = 0;
     public $webhookSecret;
     public $buyLinkSecret;
+    public $credentialsApiBaseUrl;
 
-    public function getApiBaseUrl($shopId)
-    {
-        return '';
-    }
+    public function getApiBaseUrl($shopId) { return 'https://actions.bemo.now'; }
+    public function getAppBaseUrl($shopId) { return 'https://bemo.now'; }
+    public function saveEndpoints($shopId, $apiBaseUrl, $appBaseUrl) { return true; }
+    public function getWebserviceAccountId($shopId) { return $this->accountId; }
+    public function getWebserviceAccountIds() { return $this->accountId === null ? array() : array($this->accountId); }
+    public function getPairingCredentials($shopId) { return $this->credentials; }
+    public function getPairingAttempt($shopId) { return null; }
+    public function beginPairingAttempt($shopId, $pairingToken) { return true; }
+    public function markPairingStarted($shopId, $pairingToken, $expiresAt) { return true; }
+    public function clearPairingAttempt($shopId, $pairingToken) { return true; }
 
-    public function saveApiBaseUrl($shopId, $apiBaseUrl)
+    public function clearProvisionedCredentials($shopId)
     {
+        ++$this->clearCalls;
+        $this->accountId = null;
+        $this->credentials = null;
         return true;
     }
 
-    public function getWebserviceAccountId($shopId)
+    public function saveProvisionedCredentials($shopId, $webserviceAccountId, $webserviceKey, $webhookSecret, $buyLinkSecret, $apiBaseUrl)
     {
-        return $this->accountId;
-    }
-
-    public function getWebserviceAccountIds()
-    {
-        return $this->accountId === null ? array() : array($this->accountId);
-    }
-
-    public function saveProvisionedCredentials(
-        $shopId,
-        $webserviceAccountId,
-        $webserviceKey,
-        $pairingToken,
-        $webhookSecret,
-        $buyLinkSecret
-    ) {
         $this->webhookSecret = $webhookSecret;
         $this->buyLinkSecret = $buyLinkSecret;
-
+        $this->credentialsApiBaseUrl = $apiBaseUrl;
         return $this->saveSucceeds;
     }
 }
@@ -107,33 +127,28 @@ class InMemoryConfigurationRepository implements ConfigurationRepositoryInterfac
 class FakeWebserviceGateway implements WebserviceGatewayInterface
 {
     public $enabled = false;
+    public $valid = true;
+    public $validationCalls = 0;
     public $createCalls = 0;
-    public $shopId;
-    public $createdKey;
     public $permissions = array();
     public $deletedAccountIds = array();
 
-    public function enableWebservice()
-    {
-        $this->enabled = true;
-
-        return true;
-    }
-
+    public function enableWebservice() { $this->enabled = true; return true; }
     public function createReadOnlyAccount($shopId, $key, array $permissions)
     {
         ++$this->createCalls;
-        $this->shopId = $shopId;
-        $this->createdKey = $key;
         $this->permissions = $permissions;
-
         return 73;
     }
-
-    public function deleteAccount($accountId)
+    public function isAccountValid($accountId, $shopId, $key, array $permissions)
     {
-        $this->deletedAccountIds[] = $accountId;
-
-        return true;
+        ++$this->validationCalls;
+        return $this->valid;
     }
+    public function deleteAccount($accountId) { $this->deletedAccountIds[] = $accountId; return true; }
+}
+
+class ImmediateShopLock implements ShopLockInterface
+{
+    public function synchronized($scope, $shopId, $callback) { return call_user_func($callback); }
 }

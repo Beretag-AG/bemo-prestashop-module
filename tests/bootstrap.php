@@ -1,6 +1,13 @@
 <?php
 
 define('_PS_VERSION_', '8.2.6');
+define('_DB_PREFIX_', 'ps_');
+define('_MYSQL_ENGINE_', 'InnoDB');
+
+function pSQL($value)
+{
+    return $value;
+}
 
 spl_autoload_register(function ($className) {
     $prefix = 'Bemo\\LiveShopping\\';

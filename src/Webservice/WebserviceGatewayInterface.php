@@ -12,5 +12,7 @@ interface WebserviceGatewayInterface
 
     public function createReadOnlyAccount($shopId, $key, array $permissions);
 
+    public function isAccountValid($accountId, $shopId, $key, array $permissions);
+
     public function deleteAccount($accountId);
 }

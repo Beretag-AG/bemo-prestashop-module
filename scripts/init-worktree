@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+force=0
+if [ "${1:-}" = "--force" ]; then
+  force=1
+  shift
+fi
+if [ "$#" -ne 0 ]; then
+  echo "Usage: scripts/init-worktree [--force]" >&2
+  exit 2
+fi
+
 main_repo=$(git worktree list --porcelain | head -1 | sed 's/worktree //')
 worktree_root=$(git rev-parse --show-toplevel)
 
@@ -31,8 +41,14 @@ for rel in "${local_files[@]}"; do
     continue
   fi
 
+  if [ -e "$dst" ] && [ "$force" -ne 1 ]; then
+    echo "  skip  $rel (already exists; use --force to replace)"
+    skipped=$((skipped + 1))
+    continue
+  fi
+
   mkdir -p "$(dirname "$dst")"
-  cp "$src" "$dst"
+  cp -p "$src" "$dst"
   echo "  copied  $rel"
   copied=$((copied + 1))
 done

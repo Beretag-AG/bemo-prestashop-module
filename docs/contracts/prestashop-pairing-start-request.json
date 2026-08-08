@@ -1,0 +1,11 @@
+{
+  "pairingToken": "abcdefghijklmnopqrstuv",
+  "shopUrl": "https://merchant.example",
+  "platformVersion": "8.2.6",
+  "languageId": 1,
+  "languages": ["de", "en"],
+  "currencies": ["EUR", "CHF"],
+  "webserviceKey": "0123456789abcdef0123456789abcdef",
+  "webhookSecret": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "buyLinkSecret": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+}

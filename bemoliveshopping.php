@@ -13,6 +13,14 @@ require_once __DIR__ . '/config/autoload.php';
 
 use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
 use Bemo\LiveShopping\Installation\Installer;
+use Bemo\LiveShopping\Lock\DbShopLock;
+use Bemo\LiveShopping\Pairing\CurlPairingGateway;
+use Bemo\LiveShopping\Pairing\EndpointNormalizer;
+use Bemo\LiveShopping\Pairing\EndpointPolicy;
+use Bemo\LiveShopping\Pairing\PairingException;
+use Bemo\LiveShopping\Pairing\PairingResponseParser;
+use Bemo\LiveShopping\Pairing\PairingService;
+use Bemo\LiveShopping\Pairing\PrestaShopShopDetailsProvider;
 use Bemo\LiveShopping\Security\SecretGenerator;
 use Bemo\LiveShopping\Setup\ConnectionSetupService;
 use Bemo\LiveShopping\Webservice\PrestaShopWebserviceGateway;
@@ -20,7 +28,7 @@ use Bemo\LiveShopping\Webservice\ReadOnlyPermissionMap;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.1.0';
+    const VERSION = '0.3.0';
 
     /** @var string */
     private $output = '';
@@ -77,12 +85,16 @@ class Bemoliveshopping extends Module
 
     public function getContent()
     {
-        if (Tools::isSubmit('submitBemoConfiguration')) {
-            $this->saveConfiguration();
+        if (Shop::getContext() !== Shop::CONTEXT_SHOP) {
+            return $this->displayError(
+                $this->l('Select one shop before configuring or activating BEMO. Credentials are isolated per shop.')
+            );
         }
 
-        if (Tools::isSubmit('submitBemoProvisionWebservice')) {
-            $this->provisionWebservice();
+        if (Tools::isSubmit('submitBemoActivateAccount')) {
+            $this->activateBemoAccount();
+        } elseif (Tools::isSubmit('submitBemoConfiguration')) {
+            $this->saveConfiguration();
         }
 
         return $this->output . $this->renderConfigurationForm();
@@ -90,27 +102,19 @@ class Bemoliveshopping extends Module
 
     private function saveConfiguration()
     {
-        $endpoint = trim((string) Tools::getValue('BEMO_API_BASE_URL'));
-
-        if (!$this->isAllowedEndpoint($endpoint)) {
-            $this->output .= $this->displayError(
-                $this->l('Use an HTTPS BEMO URL. HTTP is allowed only for localhost development.')
-            );
-
+        $endpoints = $this->validatedEndpointsFromRequest();
+        if ($endpoints === null) {
             return;
         }
 
-        $repository = new DbConfigurationRepository(Db::getInstance());
-        if (!$repository->saveApiBaseUrl((int) $this->context->shop->id, $endpoint)) {
-            $this->output .= $this->displayError($this->l('The BEMO configuration could not be saved.'));
-
+        if (!$this->saveEndpoints($endpoints)) {
             return;
         }
 
         $this->output .= $this->displayConfirmation($this->l('BEMO configuration saved.'));
     }
 
-    private function provisionWebservice()
+    private function activateBemoAccount()
     {
         if (!Tools::getValue('BEMO_CONFIRM_WEBSERVICE')) {
             $this->output .= $this->displayError(
@@ -120,31 +124,139 @@ class Bemoliveshopping extends Module
             return;
         }
 
-        $service = new ConnectionSetupService(
-            new DbConfigurationRepository(Db::getInstance()),
-            new PrestaShopWebserviceGateway(),
+        $endpoints = $this->validatedEndpointsFromRequest();
+        if ($endpoints === null || !$this->saveEndpoints($endpoints)) {
+            return;
+        }
+
+        $shopId = (int) $this->context->shop->id;
+        $repository = new DbConfigurationRepository(Db::getInstance());
+        $webservice = new PrestaShopWebserviceGateway();
+        $secrets = new SecretGenerator();
+        $endpoints = new EndpointNormalizer();
+        $endpointPolicy = new EndpointPolicy($endpoints, $this->isDeveloperMode());
+        $lock = new DbShopLock(Db::getInstance());
+        $setup = new ConnectionSetupService(
+            $repository,
+            $webservice,
             new ReadOnlyPermissionMap(),
-            new SecretGenerator()
+            $secrets,
+            $lock
+        );
+        $service = new PairingService(
+            $repository,
+            $setup,
+            new CurlPairingGateway(
+                $endpoints,
+                new PairingResponseParser(),
+                'BEMO-PrestaShop/' . self::VERSION
+            ),
+            new PrestaShopShopDetailsProvider($endpoints),
+            $secrets,
+            $endpoints,
+            $endpointPolicy,
+            $lock
         );
 
         try {
-            $service->provision((int) $this->context->shop->id);
-            $this->output .= $this->displayConfirmation(
-                $this->l('The read-only BEMO Webservice account and connection secrets are ready.')
-            );
+            Tools::redirect($service->start($shopId));
+        } catch (PairingException $exception) {
+            PrestaShopLogger::addLog('BEMO account activation failed: ' . $exception->getReason(), 3);
+            $this->output .= $this->displayError($this->pairingErrorMessage($exception->getReason()));
         } catch (Exception $exception) {
-            PrestaShopLogger::addLog(
-                'BEMO Webservice provisioning failed',
-                3,
-                null,
-                'Module',
-                null,
-                true
-            );
+            PrestaShopLogger::addLog('BEMO account activation failed', 3);
             $this->output .= $this->displayError(
-                $this->l('The BEMO Webservice account could not be created. No secret was displayed or logged.')
+                $this->l('The BEMO account could not be activated. Verify the settings and try again.')
             );
         }
+    }
+
+    private function validatedEndpointsFromRequest()
+    {
+        $normalizer = new EndpointNormalizer();
+        $policy = new EndpointPolicy($normalizer, $this->isDeveloperMode());
+        $pair = $this->isDeveloperMode()
+            ? $policy->normalizePair(
+                Tools::getValue('BEMO_API_BASE_URL'),
+                Tools::getValue('BEMO_APP_BASE_URL')
+            )
+            : $policy->normalizePair(
+                EndpointPolicy::PRODUCTION_API_BASE_URL,
+                EndpointPolicy::PRODUCTION_APP_BASE_URL
+            );
+
+        if ($pair === null) {
+            $this->output .= $this->displayError(
+                $this->l('Custom BEMO endpoints are available only in PrestaShop developer mode and must be HTTPS base URLs without paths or query strings. HTTP is allowed only for localhost.')
+            );
+
+            return;
+        }
+
+        return $pair;
+    }
+
+    private function saveEndpoints(array $endpoints)
+    {
+        $repository = new DbConfigurationRepository(Db::getInstance());
+        $shopId = (int) $this->context->shop->id;
+        $gateway = new PrestaShopWebserviceGateway();
+        try {
+            $saved = (new DbShopLock(Db::getInstance()))->synchronized(
+                'configuration',
+                $shopId,
+                function () use ($repository, $gateway, $shopId, $endpoints) {
+                    $changed = $repository->getApiBaseUrl($shopId) !== $endpoints[0]
+                        || $repository->getAppBaseUrl($shopId) !== $endpoints[1];
+                    if ($changed) {
+                        $accountId = $repository->getWebserviceAccountId($shopId);
+                        if ($accountId !== null && !$gateway->deleteAccount($accountId)) {
+                            return false;
+                        }
+                        if ($accountId !== null && !$repository->clearProvisionedCredentials($shopId)) {
+                            return false;
+                        }
+                    }
+
+                    return $repository->saveEndpoints($shopId, $endpoints[0], $endpoints[1]);
+                }
+            );
+        } catch (Exception $exception) {
+            PrestaShopLogger::addLog('BEMO endpoint configuration is busy', 2);
+            $saved = false;
+        }
+        if (!$saved) {
+            $this->output .= $this->displayError($this->l('The BEMO configuration could not be saved.'));
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function pairingErrorMessage($reason)
+    {
+        if ($reason === PairingException::RATE_LIMITED) {
+            return $this->l('Too many pairing attempts were made. Wait a moment and try again.');
+        }
+
+        if ($reason === PairingException::NETWORK) {
+            return $this->l('BEMO could not be reached. Verify the API URL and the shop network connection.');
+        }
+
+        if ($reason === PairingException::CONFIGURATION) {
+            return $this->l('The BEMO API or app URL is invalid. Save valid HTTPS base URLs and try again.');
+        }
+
+        if ($reason === PairingException::SHOP_CONTEXT) {
+            return $this->l('The shop needs an HTTPS URL, an active language, and an active currency before it can connect to BEMO.');
+        }
+
+        if ($reason === PairingException::CREDENTIALS || $reason === PairingException::PERSISTENCE) {
+            return $this->l('The BEMO credentials could not be prepared safely. Retry activation or contact BEMO support.');
+        }
+
+        return $this->l('BEMO rejected the activation request. Retry to create a fresh pairing link.');
     }
 
     private function renderConfigurationForm()
@@ -159,7 +271,12 @@ class Bemoliveshopping extends Module
         $helper->submit_action = 'submitBemoConfiguration';
         $helper->default_form_language = (int) Configuration::get('PS_LANG_DEFAULT');
         $helper->fields_value = array(
-            'BEMO_API_BASE_URL' => $repository->getApiBaseUrl($shopId),
+            'BEMO_API_BASE_URL' => $this->isDeveloperMode()
+                ? $repository->getApiBaseUrl($shopId)
+                : EndpointPolicy::PRODUCTION_API_BASE_URL,
+            'BEMO_APP_BASE_URL' => $this->isDeveloperMode()
+                ? $repository->getAppBaseUrl($shopId)
+                : EndpointPolicy::PRODUCTION_APP_BASE_URL,
             'BEMO_CONFIRM_WEBSERVICE' => 0,
         );
 
@@ -183,6 +300,14 @@ class Bemoliveshopping extends Module
                         'label' => $this->l('BEMO API URL'),
                         'name' => 'BEMO_API_BASE_URL',
                         'required' => true,
+                        'readonly' => !$this->isDeveloperMode(),
+                    ),
+                    array(
+                        'type' => 'text',
+                        'label' => $this->l('BEMO app URL'),
+                        'name' => 'BEMO_APP_BASE_URL',
+                        'required' => true,
+                        'readonly' => !$this->isDeveloperMode(),
                     ),
                     array(
                         'type' => 'switch',
@@ -197,8 +322,8 @@ class Bemoliveshopping extends Module
                 ),
                 'buttons' => array(
                     array(
-                        'title' => $this->l('Provision Webservice access'),
-                        'name' => 'submitBemoProvisionWebservice',
+                        'title' => $this->l('Activate BEMO account'),
+                        'name' => 'submitBemoActivateAccount',
                         'type' => 'submit',
                         'class' => 'btn btn-default pull-left',
                         'icon' => 'process-icon-key',
@@ -211,18 +336,9 @@ class Bemoliveshopping extends Module
         );
     }
 
-    private function isAllowedEndpoint($endpoint)
+    private function isDeveloperMode()
     {
-        $parts = parse_url($endpoint);
-        if (!is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
-            return false;
-        }
-
-        if ($parts['scheme'] === 'https') {
-            return true;
-        }
-
-        return $parts['scheme'] === 'http'
-            && in_array($parts['host'], array('localhost', '127.0.0.1', '::1'), true);
+        return defined('_PS_MODE_DEV_') && _PS_MODE_DEV_ === true;
     }
+
 }
