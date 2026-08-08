@@ -4,7 +4,7 @@ define('_PS_VERSION_', '8.2.6');
 define('_DB_PREFIX_', 'ps_');
 define('_MYSQL_ENGINE_', 'InnoDB');
 
-function pSQL($value)
+function pSQL($value, $htmlOK = false)
 {
     return $value;
 }

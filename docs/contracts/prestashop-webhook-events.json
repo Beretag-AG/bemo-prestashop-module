@@ -1,0 +1,12 @@
+[
+  {"eventId":"prestashop:0000000000000000000001","hook":"product.added","occurredAt":1800000000000,"resourceId":119,"resourceType":"product","shopId":7,"shopUrl":"https://shop.example"},
+  {"eventId":"prestashop:0000000000000000000002","hook":"product.updated","occurredAt":1800000000000,"resourceId":119,"resourceType":"product","shopId":7,"shopUrl":"https://shop.example"},
+  {"eventId":"prestashop:0000000000000000000003","hook":"product.deleted","occurredAt":1800000000000,"resourceId":119,"resourceType":"product","shopId":7,"shopUrl":"https://shop.example"},
+  {"eventId":"prestashop:0000000000000000000004","hook":"stock.updated","occurredAt":1800000000000,"resourceId":119,"resourceType":"stock","shopId":7,"shopUrl":"https://shop.example"},
+  {"eventId":"prestashop:0000000000000000000005","hook":"price.added","occurredAt":1800000000000,"resourceId":301,"resourceType":"price","shopId":7,"shopUrl":"https://shop.example"},
+  {"eventId":"prestashop:0000000000000000000006","hook":"price.updated","occurredAt":1800000000000,"resourceId":301,"resourceType":"price","shopId":7,"shopUrl":"https://shop.example"},
+  {"eventId":"prestashop:0000000000000000000007","hook":"price.deleted","occurredAt":1800000000000,"resourceId":301,"resourceType":"price","shopId":7,"shopUrl":"https://shop.example"},
+  {"eventId":"prestashop:0000000000000000000008","hook":"voucher.added","occurredAt":1800000000000,"resourceId":51,"resourceType":"voucher","shopId":7,"shopUrl":"https://shop.example"},
+  {"eventId":"prestashop:0000000000000000000009","hook":"voucher.updated","occurredAt":1800000000000,"resourceId":51,"resourceType":"voucher","shopId":7,"shopUrl":"https://shop.example"},
+  {"eventId":"prestashop:0000000000000000000010","hook":"voucher.deleted","occurredAt":1800000000000,"resourceId":51,"resourceType":"voucher","shopId":7,"shopUrl":"https://shop.example"}
+]

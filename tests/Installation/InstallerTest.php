@@ -17,6 +17,9 @@ class InstallerTest extends TestCase
         self::assertStringContainsString('https://actions.bemo.now', $db->executed[0]);
         self::assertStringContainsString('`credentials_api_base_url`', $db->executed[0]);
         self::assertStringContainsString('`pairing_expires_at`', $db->executed[0]);
+        self::assertStringContainsString('bemoliveshopping_outbox', $db->executed[1]);
+        self::assertStringContainsString('UNIQUE KEY `uniq_bemoliveshopping_event`', $db->executed[1]);
+        self::assertStringContainsString('`status`, `available_at`', $db->executed[1]);
     }
 
     public function testUpgradeAddsCredentialOriginAndPairingExpiry()
@@ -27,6 +30,7 @@ class InstallerTest extends TestCase
         self::assertStringContainsString('credentials_api_base_url', $db->executed[0]);
         self::assertStringContainsString('pairing_expires_at', $db->executed[1]);
         self::assertStringContainsString('actions.bemo.now', $db->executed[2]);
+        self::assertStringContainsString('bemoliveshopping_outbox', $db->executed[3]);
     }
 
     public function testUpgradeAddsTheAppUrlColumnOnce()
@@ -42,18 +46,29 @@ class InstallerTest extends TestCase
         self::assertTrue($installer->upgradeToVersion020());
         self::assertCount(1, $db->executed);
     }
+
+    public function testInstallRollsBackConfigurationTableWhenOutboxCreationFails()
+    {
+        $db = new InstallerDb();
+        $db->results = array(true, false, true);
+
+        self::assertFalse((new Installer($db))->install());
+        self::assertStringContainsString('bemoliveshopping_configuration', $db->executed[2]);
+        self::assertStringContainsString('DROP TABLE', $db->executed[2]);
+    }
 }
 
 class InstallerDb
 {
     public $columns = array();
     public $executed = array();
+    public $results = array();
 
     public function execute($sql)
     {
         $this->executed[] = $sql;
 
-        return true;
+        return $this->results === array() ? true : array_shift($this->results);
     }
 
     public function executeS($sql)

@@ -16,7 +16,10 @@ for required in \
   bemoliveshopping/config.xml \
   bemoliveshopping/LICENSE.md \
   bemoliveshopping/config/autoload.php \
+  bemoliveshopping/controllers/front/buy.php \
+  bemoliveshopping/src/Checkout/index.php \
   bemoliveshopping/src/Pairing/index.php \
+  bemoliveshopping/src/Webhook/index.php \
   bemoliveshopping/upgrade/index.php \
   bemoliveshopping/upgrade/upgrade-0.2.0.php \
   bemoliveshopping/upgrade/upgrade-0.3.0.php; do
