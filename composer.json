@@ -1,0 +1,30 @@
+{
+  "name": "beretag/bemo-prestashop-module",
+  "description": "BEMO Live Shopping integration for PrestaShop",
+  "type": "prestashop-module",
+  "license": "AFL-3.0",
+  "require": {
+    "php": ">=7.2.5"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^8.5"
+  },
+  "autoload": {
+    "psr-4": {
+      "Bemo\\LiveShopping\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Bemo\\LiveShopping\\Tests\\": "tests/"
+    }
+  },
+  "config": {
+    "allow-plugins": false,
+    "sort-packages": true
+  },
+  "scripts": {
+    "test": "phpunit",
+    "package": "bash scripts/package.sh"
+  }
+}
