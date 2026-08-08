@@ -1,0 +1,14 @@
+{
+  "secret": "contract-buy-link-secret",
+  "now": 1800000000000,
+  "payload": {
+    "connectionId": "connection_1",
+    "expiresAt": 1800000600000,
+    "externalProductId": 119,
+    "issuedAt": 1800000000000,
+    "nonce": "nonce_1",
+    "productId": "product_1",
+    "sessionId": "session_1"
+  },
+  "token": "eyJjb25uZWN0aW9uSWQiOiJjb25uZWN0aW9uXzEiLCJleHBpcmVzQXQiOjE4MDAwMDA2MDAwMDAsImV4dGVybmFsUHJvZHVjdElkIjoxMTksImlzc3VlZEF0IjoxODAwMDAwMDAwMDAwLCJub25jZSI6Im5vbmNlXzEiLCJwcm9kdWN0SWQiOiJwcm9kdWN0XzEiLCJzZXNzaW9uSWQiOiJzZXNzaW9uXzEifQ.1d9d2f26fe2926c95457d74ba243e24fb53e9337a2ae421f14d671c5d7899fe1"
+}

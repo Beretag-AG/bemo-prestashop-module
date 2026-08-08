@@ -25,6 +25,9 @@ use Bemo\LiveShopping\Security\SecretGenerator;
 use Bemo\LiveShopping\Setup\ConnectionSetupService;
 use Bemo\LiveShopping\Webservice\PrestaShopWebserviceGateway;
 use Bemo\LiveShopping\Webservice\ReadOnlyPermissionMap;
+use Bemo\LiveShopping\Webhook\CurlWebhookGateway;
+use Bemo\LiveShopping\Webhook\DbOutboxRepository;
+use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
@@ -41,6 +44,7 @@ class Bemoliveshopping extends Module
         $this->author = 'Beretag AG';
         $this->need_instance = 0;
         $this->bootstrap = true;
+        $this->dependencies = array('cronjobs');
         $this->ps_versions_compliancy = array(
             'min' => '1.7.6.0',
             'max' => '8.99.99',
@@ -61,10 +65,19 @@ class Bemoliveshopping extends Module
             return false;
         }
 
-        $installer = new Installer(Db::getInstance());
+        if (!parent::install()) {
+            return false;
+        }
 
-        return parent::install()
-            && $installer->install();
+        $installer = new Installer(Db::getInstance());
+        if (!$installer->install() || !$this->registerBemoHooks()) {
+            $installer->uninstall();
+            parent::uninstall();
+
+            return false;
+        }
+
+        return true;
     }
 
     public function uninstall()
@@ -83,6 +96,12 @@ class Bemoliveshopping extends Module
         return $installer->uninstall() && parent::uninstall();
     }
 
+    public function upgradeToVersion030()
+    {
+        return (new Installer(Db::getInstance()))->upgradeToVersion030()
+            && $this->registerBemoHooks();
+    }
+
     public function getContent()
     {
         if (Shop::getContext() !== Shop::CONTEXT_SHOP) {
@@ -98,6 +117,79 @@ class Bemoliveshopping extends Module
         }
 
         return $this->output . $this->renderConfigurationForm();
+    }
+
+    public function hookActionObjectProductAddAfter($params)
+    {
+        return $this->enqueueObjectWebhook($params, 'product.added', 'product');
+    }
+
+    public function hookActionObjectProductUpdateAfter($params)
+    {
+        return $this->enqueueObjectWebhook($params, 'product.updated', 'product');
+    }
+
+    public function hookActionObjectProductDeleteAfter($params)
+    {
+        return $this->enqueueObjectWebhook($params, 'product.deleted', 'product');
+    }
+
+    public function hookActionUpdateQuantity($params)
+    {
+        $productId = isset($params['id_product']) ? (int) $params['id_product'] : 0;
+
+        return $this->enqueueWebhook('stock.updated', 'stock', $productId);
+    }
+
+    public function hookActionObjectSpecificPriceAddAfter($params)
+    {
+        return $this->enqueueObjectWebhook($params, 'price.added', 'price');
+    }
+
+    public function hookActionObjectSpecificPriceUpdateAfter($params)
+    {
+        return $this->enqueueObjectWebhook($params, 'price.updated', 'price');
+    }
+
+    public function hookActionObjectSpecificPriceDeleteAfter($params)
+    {
+        return $this->enqueueObjectWebhook($params, 'price.deleted', 'price');
+    }
+
+    public function hookActionObjectCartRuleAddAfter($params)
+    {
+        return $this->enqueueObjectWebhook($params, 'voucher.added', 'voucher');
+    }
+
+    public function hookActionObjectCartRuleUpdateAfter($params)
+    {
+        return $this->enqueueObjectWebhook($params, 'voucher.updated', 'voucher');
+    }
+
+    public function hookActionObjectCartRuleDeleteAfter($params)
+    {
+        return $this->enqueueObjectWebhook($params, 'voucher.deleted', 'voucher');
+    }
+
+    public function hookActionCronJob()
+    {
+        try {
+            return $this->webhookOutbox()->drain();
+        } catch (Exception $exception) {
+            PrestaShopLogger::addLog('BEMO webhook outbox processing failed', 3);
+
+            return false;
+        }
+    }
+
+    public function getCronFrequency()
+    {
+        return array(
+            'hour' => -1,
+            'day' => -1,
+            'month' => -1,
+            'day_of_week' => -1,
+        );
     }
 
     private function saveConfiguration()
@@ -339,6 +431,79 @@ class Bemoliveshopping extends Module
     private function isDeveloperMode()
     {
         return defined('_PS_MODE_DEV_') && _PS_MODE_DEV_ === true;
+    }
+
+    private function registerBemoHooks()
+    {
+        $hooks = array(
+            'actionObjectProductAddAfter',
+            'actionObjectProductUpdateAfter',
+            'actionObjectProductDeleteAfter',
+            'actionUpdateQuantity',
+            'actionObjectSpecificPriceAddAfter',
+            'actionObjectSpecificPriceUpdateAfter',
+            'actionObjectSpecificPriceDeleteAfter',
+            'actionObjectCartRuleAddAfter',
+            'actionObjectCartRuleUpdateAfter',
+            'actionObjectCartRuleDeleteAfter',
+            'actionCronJob',
+        );
+
+        foreach ($hooks as $hook) {
+            if (!$this->registerHook($hook)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function enqueueObjectWebhook($params, $hook, $resourceType)
+    {
+        $object = isset($params['object']) ? $params['object'] : null;
+        $resourceId = is_object($object) && isset($object->id) ? (int) $object->id : 0;
+
+        return $this->enqueueWebhook($hook, $resourceType, $resourceId);
+    }
+
+    private function enqueueWebhook($hook, $resourceType, $resourceId)
+    {
+        if ($resourceId <= 0 || !isset($this->context->shop->id)) {
+            return false;
+        }
+
+        try {
+            $queued = $this->webhookOutbox()->enqueue(
+                (int) $this->context->shop->id,
+                $hook,
+                $resourceType,
+                $resourceId
+            );
+            if (!$queued) {
+                PrestaShopLogger::addLog('BEMO webhook event could not be queued', 3);
+            }
+
+            return $queued;
+        } catch (Exception $exception) {
+            PrestaShopLogger::addLog('BEMO webhook event could not be queued', 3);
+
+            return false;
+        }
+    }
+
+    private function webhookOutbox()
+    {
+        $db = Db::getInstance();
+        $endpoints = new EndpointNormalizer();
+
+        return new WebhookOutbox(
+            new DbConfigurationRepository($db),
+            new DbOutboxRepository($db),
+            new CurlWebhookGateway($endpoints, 'BEMO-PrestaShop/' . self::VERSION),
+            new PrestaShopShopDetailsProvider($endpoints),
+            new SecretGenerator(),
+            new DbShopLock($db)
+        );
     }
 
 }

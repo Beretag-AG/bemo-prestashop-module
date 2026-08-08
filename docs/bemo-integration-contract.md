@@ -79,9 +79,10 @@ after a successful claim. Ambiguous network and rate-limit failures reuse the
 same token and payload; BEMO returns the original expiry for that exact retry.
 Definitive rejection clears the local attempt before a fresh token is created.
 
-The future contract suite must include JSON fixtures for pairing and every
-webhook event, plus golden HMAC vectors containing exact raw body bytes and
-expected signatures.
+The committed contract suite includes JSON fixtures for pairing, every webhook
+event, an exact-byte webhook HMAC vector, and a golden signed buy-link token.
+The BEMO and module repositories each consume matching copies so either side
+fails verification when the wire contract drifts.
 
 ## Webservice permission contract
 

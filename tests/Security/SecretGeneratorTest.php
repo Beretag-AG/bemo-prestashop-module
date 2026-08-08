@@ -7,6 +7,13 @@ use PHPUnit\Framework\TestCase;
 
 class SecretGeneratorTest extends TestCase
 {
+    public function testEventIdsAreNamespacedAndCarry128BitsOfEntropy()
+    {
+        $eventId = (new SecretGenerator())->eventId();
+
+        self::assertRegExp('/^prestashop:[A-Za-z0-9_-]{22}$/', $eventId);
+    }
+
     public function testGeneratesAThirtyTwoCharacterWebserviceKey()
     {
         $generator = new SecretGenerator();

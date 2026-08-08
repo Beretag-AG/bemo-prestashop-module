@@ -23,6 +23,11 @@ class SecretGenerator
         return bin2hex(random_bytes(16));
     }
 
+    public function eventId()
+    {
+        return 'prestashop:' . $this->base64Url(random_bytes(16));
+    }
+
     private function base64Url($bytes)
     {
         return rtrim(strtr(base64_encode($bytes), '+/', '-_'), '=');

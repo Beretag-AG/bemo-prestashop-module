@@ -18,7 +18,24 @@ class Installer
 
     public function install()
     {
-        $sql = 'CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'bemoliveshopping_configuration` (
+        if (!$this->db->execute($this->configurationTableSql())) {
+            return false;
+        }
+
+        if (!$this->db->execute($this->outboxTableSql())) {
+            $this->db->execute(
+                'DROP TABLE IF EXISTS `' . _DB_PREFIX_ . 'bemoliveshopping_configuration`'
+            );
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function configurationTableSql()
+    {
+        return 'CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'bemoliveshopping_configuration` (
             `id_bemoliveshopping_configuration` INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `id_shop` INT UNSIGNED NOT NULL,
             `api_base_url` VARCHAR(255) NOT NULL DEFAULT \'https://actions.bemo.now\',
@@ -37,8 +54,25 @@ class Installer
             PRIMARY KEY (`id_bemoliveshopping_configuration`),
             UNIQUE KEY `uniq_bemoliveshopping_shop` (`id_shop`)
         ) ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8;';
+    }
 
-        return (bool) $this->db->execute($sql);
+    private function outboxTableSql()
+    {
+        return 'CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'bemoliveshopping_outbox` (
+            `id_bemoliveshopping_outbox` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `id_shop` INT UNSIGNED NOT NULL,
+            `event_id` VARCHAR(64) NOT NULL,
+            `payload` MEDIUMTEXT NOT NULL,
+            `attempts` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+            `status` VARCHAR(16) NOT NULL DEFAULT \'pending\',
+            `available_at` DATETIME NOT NULL,
+            `date_add` DATETIME NOT NULL,
+            `date_upd` DATETIME NOT NULL,
+            PRIMARY KEY (`id_bemoliveshopping_outbox`),
+            UNIQUE KEY `uniq_bemoliveshopping_event` (`event_id`),
+            KEY `idx_bemoliveshopping_due` (`status`, `available_at`),
+            KEY `idx_bemoliveshopping_outbox_shop` (`id_shop`)
+        ) ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8;';
     }
 
     public function upgradeToVersion020()
@@ -90,17 +124,26 @@ class Installer
             return false;
         }
 
-        return (bool) $this->db->execute(
+        if (!$this->db->execute(
             'UPDATE `' . _DB_PREFIX_ . 'bemoliveshopping_configuration`'
             . " SET `api_base_url` = 'https://actions.bemo.now'"
             . " WHERE `api_base_url` = ''"
-        );
+        )) {
+            return false;
+        }
+
+        return (bool) $this->db->execute($this->outboxTableSql());
     }
 
     public function uninstall()
     {
-        return (bool) $this->db->execute(
+        $outboxRemoved = (bool) $this->db->execute(
+            'DROP TABLE IF EXISTS `' . _DB_PREFIX_ . 'bemoliveshopping_outbox`'
+        );
+        $configurationRemoved = (bool) $this->db->execute(
             'DROP TABLE IF EXISTS `' . _DB_PREFIX_ . 'bemoliveshopping_configuration`'
         );
+
+        return $outboxRemoved && $configurationRemoved;
     }
 }

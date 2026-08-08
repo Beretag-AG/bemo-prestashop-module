@@ -8,11 +8,10 @@ be presented during paid live sessions while checkout remains on the
 merchant's own storefront.
 
 > [!IMPORTANT]
-> This module is under active development and is not ready for production
-> shops yet. The current version provides installation, configuration,
-> credential provisioning, and the module side of account pairing. The BEMO
-> claim screen, event delivery, and customer purchase flow are still being
-> completed.
+> This module is under active development and is being prepared for a
+> production pilot. Pairing, durable catalog events, and signed purchase links
+> are implemented; complete the staging validation checklist before installing
+> it on a live shop.
 
 ## Requirements
 
@@ -20,6 +19,7 @@ merchant's own storefront.
 | --- | --- |
 | PrestaShop | 1.7.6 through 8.x |
 | PHP | 7.2.5 through 8.1 |
+| Module dependency | PrestaShop Cron tasks manager (`cronjobs`) |
 
 PrestaShop 1.7.6 installations running PHP 5.6–7.1 must upgrade PHP before
 installing this module. PrestaShop 9 is not supported by the current release.
@@ -37,13 +37,17 @@ installing this module. PrestaShop 9 is not supported by the current release.
   signed purchase links.
 - Starts a short-lived BEMO pairing handoff and redirects the administrator to
   the configured BEMO application without rendering or logging credentials.
+- Queues catalog-change events durably and delivers exact-byte HMAC-signed
+  webhooks outside merchant requests, with idempotent ingestion and retry.
+- Validates short-lived signed purchase links and resolves their product only
+  inside the currently selected shop.
 - Removes only module-owned Webservice accounts during uninstall, including in
   multistore installations.
 - Produces a deterministic ZIP that can be uploaded through Module Manager.
 
 ## Installation
 
-There is no production release yet. To create a development build:
+There is no general-availability release yet. To create a pilot build:
 
 ```bash
 git clone https://github.com/Beretag-AG/bemo-prestashop-module.git
@@ -64,7 +68,8 @@ To install it in a development or staging shop:
    when PrestaShop developer mode is enabled.
 6. Review the Webservice notice and explicitly activate the BEMO account.
 
-Do not test an unreleased build on a production shop.
+Keep the Cron tasks manager active so queued catalog events are drained. Use
+its Advanced mode when the hosting platform already provides a scheduler.
 
 ## Development
 

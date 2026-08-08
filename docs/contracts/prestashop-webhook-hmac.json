@@ -1,0 +1,5 @@
+{
+  "secret": "contract-webhook-secret",
+  "rawBody": "{\"eventId\":\"prestashop:0000000000000000000001\",\"hook\":\"product.added\",\"occurredAt\":1800000000000,\"resourceId\":119,\"resourceType\":\"product\",\"shopId\":7,\"shopUrl\":\"https://shop.example\"}",
+  "signature": "93987859e6a0e98b0c6e1c44a11889a47ac28fac79b859337f616ee9554eca85"
+}
