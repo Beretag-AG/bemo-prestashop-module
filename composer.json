@@ -4,7 +4,7 @@
   "type": "prestashop-module",
   "license": "AFL-3.0",
   "require": {
-    "php": ">=7.2.5"
+    "php": ">=7.2.5 <8.2"
   },
   "require-dev": {
     "phpunit/phpunit": "^8.5"
@@ -21,10 +21,21 @@
   },
   "config": {
     "allow-plugins": false,
+    "platform": {
+      "php": "7.2.5"
+    },
     "sort-packages": true
   },
   "scripts": {
+    "check:php": "bash scripts/check-php-matrix.sh",
+    "check:package": "bash tests/package-structure.sh",
+    "package": "bash scripts/package.sh",
     "test": "phpunit",
-    "package": "bash scripts/package.sh"
+    "test:matrix": "bash scripts/test-php-matrix.sh",
+    "verify": [
+      "@check:php",
+      "@test:matrix",
+      "@check:package"
+    ]
   }
 }

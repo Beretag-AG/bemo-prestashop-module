@@ -34,11 +34,26 @@ overlap between the legacy target and PrestaShop 8; shops running PrestaShop
 
 ## Development
 
-PHP and Composer are prerequisites:
+The local toolchain uses current PHP/Composer for dependency management and
+keeps the two PrestaShop runtime edges available side-by-side:
+
+```bash
+brew tap shivammathur/php
+brew install php php@8.1 shivammathur/php/php@7.2 composer
+brew unlink php@7.2
+brew link php
+```
+
+This leaves PHP 8.5 as the default while the matrix scripts resolve keg-only
+PHP 7.2 and 8.1 directly. Dependencies are locked against PHP 7.2.5, preventing
+Composer from selecting packages that cannot run on the oldest supported
+module runtime.
+
+Install dependencies and run the focused checks:
 
 ```bash
 composer install
-composer test
+composer verify
 ```
 
 Build the installable artifact with:
