@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+main_repo=$(git worktree list --porcelain | head -1 | sed 's/worktree //')
+worktree_root=$(git rev-parse --show-toplevel)
+
+if [ "$main_repo" = "$worktree_root" ]; then
+  echo "Already in the main worktree. Nothing to initialize."
+  exit 0
+fi
+
+local_files=(
+  ".env"
+  ".env.local"
+)
+
+copied=0
+skipped=0
+
+echo "Initializing worktree at $worktree_root"
+echo "Copying local files from $main_repo"
+echo ""
+
+for rel in "${local_files[@]}"; do
+  src="$main_repo/$rel"
+  dst="$worktree_root/$rel"
+
+  if [ ! -f "$src" ]; then
+    echo "  skip  $rel (not in main repo)"
+    skipped=$((skipped + 1))
+    continue
+  fi
+
+  mkdir -p "$(dirname "$dst")"
+  cp "$src" "$dst"
+  echo "  copied  $rel"
+  copied=$((copied + 1))
+done
+
+echo ""
+echo "Done. $copied copied, $skipped skipped."

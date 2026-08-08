@@ -95,6 +95,19 @@ composer verify
 Composer resolves dependencies against PHP 7.2.5 so the lockfile cannot
 silently select packages that require a newer module runtime.
 
+### Worktrees
+
+After creating a Git worktree, initialize it from inside the new checkout:
+
+```bash
+scripts/init-worktree
+composer install
+```
+
+The initializer copies optional `.env` and `.env.local` files from the primary
+checkout. It is safe to rerun and does nothing when invoked from the primary
+checkout.
+
 ## Security
 
 - PrestaShop Webservice access is limited to `GET` and `HEAD` on required
