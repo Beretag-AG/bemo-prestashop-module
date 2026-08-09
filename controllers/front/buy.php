@@ -5,6 +5,8 @@ if (!defined('_PS_VERSION_')) {
 }
 
 use Bemo\LiveShopping\Checkout\BuyLinkVerifier;
+use Bemo\LiveShopping\Checkout\CheckoutEntryService;
+use Bemo\LiveShopping\Checkout\PrestaShopCartCheckoutGateway;
 use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
 
 class BemoliveshoppingBuyModuleFrontController extends ModuleFrontController
@@ -40,7 +42,14 @@ class BemoliveshoppingBuyModuleFrontController extends ModuleFrontController
             $this->redirectToNotFound();
         }
 
-        Tools::redirect($this->context->link->getProductLink($product));
+        $checkoutUrl = (new CheckoutEntryService(
+            new PrestaShopCartCheckoutGateway($this->context, $product)
+        ))->enter($productId);
+        if ($checkoutUrl === null) {
+            $this->redirectToNotFound();
+        }
+
+        Tools::redirect($checkoutUrl);
     }
 
     private function redirectToNotFound()
