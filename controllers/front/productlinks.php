@@ -36,7 +36,7 @@ class BemoliveshoppingProductlinksModuleFrontController extends ModuleFrontContr
         $products = array();
         foreach ($ids as $productId) {
             $product = new Product($productId, false, (int) $this->context->language->id, $shopId);
-            if (!Validate::isLoadedObject($product) || !Product::isAssociatedToShop($productId, $shopId)) {
+            if (!Validate::isLoadedObject($product) || !$product->isAssociatedToShop($shopId)) {
                 continue;
             }
             $products[] = array(

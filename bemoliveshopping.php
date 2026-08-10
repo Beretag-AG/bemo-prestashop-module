@@ -32,7 +32,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.3.2';
+    const VERSION = '0.3.3';
 
     /** @var string */
     private $output = '';
@@ -244,7 +244,10 @@ class Bemoliveshopping extends Module
                 new PairingResponseParser(),
                 'BEMO-PrestaShop/' . self::VERSION
             ),
-            new PrestaShopShopDetailsProvider($endpoints),
+            new PrestaShopShopDetailsProvider(
+                $endpoints,
+                Tools::getValue('BEMO_CONFIRM_EMBEDDED_CHECKOUT')
+            ),
             $secrets,
             $endpoints,
             $endpointPolicy,
@@ -382,6 +385,7 @@ class Bemoliveshopping extends Module
                     ? $repository->getAppBaseUrl($shopId)
                     : EndpointPolicy::PRODUCTION_APP_BASE_URL),
             'BEMO_CONFIRM_WEBSERVICE' => 0,
+            'BEMO_CONFIRM_EMBEDDED_CHECKOUT' => 0,
         );
 
         return $helper->generateForm(array($this->configurationForm($environmentValues !== null)));
@@ -423,6 +427,19 @@ class Bemoliveshopping extends Module
                         'values' => array(
                             array('id' => 'bemo_ws_on', 'value' => 1, 'label' => $this->l('Yes')),
                             array('id' => 'bemo_ws_off', 'value' => 0, 'label' => $this->l('No')),
+                        ),
+                    ),
+                    array(
+                        'type' => 'switch',
+                        'label' => $this->l('Allow checkout inside BEMO'),
+                        'name' => 'BEMO_CONFIRM_EMBEDDED_CHECKOUT',
+                        'is_bool' => true,
+                        'desc' => $this->l(
+                            'Confirm that checkout cookies are Secure, SameSite=None and Partitioned, and that framing headers allow the configured BEMO app URL. Otherwise BEMO will open the shop in a new tab.'
+                        ),
+                        'values' => array(
+                            array('id' => 'bemo_embed_on', 'value' => 1, 'label' => $this->l('Yes')),
+                            array('id' => 'bemo_embed_off', 'value' => 0, 'label' => $this->l('No')),
                         ),
                     ),
                 ),

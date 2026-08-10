@@ -11,9 +11,13 @@ class PrestaShopShopDetailsProvider implements ShopDetailsProviderInterface
     /** @var EndpointNormalizer */
     private $endpoints;
 
-    public function __construct(EndpointNormalizer $endpoints)
+    /** @var bool */
+    private $embeddedCheckoutConfirmed;
+
+    public function __construct(EndpointNormalizer $endpoints, $embeddedCheckoutConfirmed = false)
     {
         $this->endpoints = $endpoints;
+        $this->embeddedCheckoutConfirmed = (bool) $embeddedCheckoutConfirmed;
     }
 
     public function get($shopId)
@@ -65,7 +69,8 @@ class PrestaShopShopDetailsProvider implements ShopDetailsProviderInterface
             $shopId
         );
 
-        return $sslEnabled
+        return $this->embeddedCheckoutConfirmed
+            && $sslEnabled
             && is_string($sameSite)
             && strtolower($sameSite) === 'none';
     }

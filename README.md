@@ -102,9 +102,42 @@ curl -sSI https://shop.example/checkout \
 ```
 
 There must be no blocking `X-Frame-Options`; any `frame-ancestors` directive
-must include the BEMO origin; and the PrestaShop session cookie must be
-`Secure` with `SameSite=None`. The merchant's PrestaShop/payment provider
-remains the checkout and payment processor. BEMO never receives card details.
+must include the BEMO origin; and the PrestaShop session and cart cookies must
+be `Secure` with `SameSite=None; Partitioned`. PrestaShop 8 does not emit the
+`Partitioned` attribute itself on PHP 8.1, so configure it at the host, reverse
+proxy, or CDN for secure storefront cookies. The merchant's PrestaShop/payment
+provider remains the checkout and payment processor. BEMO never receives card
+details.
+
+### Merchant handoff checklist
+
+Ask the merchant or hosting provider to complete these steps on a staging copy
+before BEMO enables embedded checkout on the live shop:
+
+1. Install or upgrade **BEMO Live Shopping 0.3.3 or newer** and keep **Cron
+   tasks manager** active.
+2. Enable HTTPS for the entire storefront, including cart, checkout, payment,
+   return, and confirmation pages.
+3. Set **Cookie SameSite** to **None** under **Advanced Parameters →
+   Administration**. At the host, reverse proxy, or CDN, append `Partitioned`
+   to the secure PrestaShop session and cart cookies. Confirm the resulting
+   cookies are marked `Secure; SameSite=None; Partitioned`.
+4. Ask the host, CDN, theme, and checkout/payment-module owners to allow the
+   exact BEMO origin in every framed response. Remove blocking
+   `X-Frame-Options`; when CSP is used, include the BEMO origin in
+   `frame-ancestors`.
+5. Re-pair the shop from the BEMO module configuration page after those
+   settings are live. Select **Yes** for **Allow checkout inside BEMO** only
+   after the header and cookie checks pass. BEMO records readiness only during
+   pairing.
+6. From a legitimate viewer account, test one highlighted product and finish
+   a sandbox order in the BEMO dialog and with **Open in new tab**, for every
+   enabled payment method and 3-D Secure flow.
+
+For production use `https://bemo.now`; for BEMO staging use
+`https://beta.bemo.now`. If any part of the merchant's checkout stack cannot be
+framed, keep the connection in `link_out` mode. The normal top-level checkout
+remains the supported fallback.
 
 ## Development
 
