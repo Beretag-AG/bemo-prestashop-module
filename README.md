@@ -71,6 +71,41 @@ To install it in a development or staging shop:
 Keep the Cron tasks manager active so queued catalog events are drained. Use
 its Advanced mode when the hosting platform already provides a scheduler.
 
+## Embedded checkout
+
+BEMO can keep PrestaShop checkout inside the live session, but the shop must
+explicitly be ready for a cross-site iframe. Otherwise BEMO safely opens the
+canonical product page in a new tab.
+
+Before pairing a shop for embedded checkout:
+
+1. Serve the complete storefront and checkout over HTTPS.
+2. In **Advanced Parameters → Administration**, set **Cookie SameSite** to
+   **None**. The exact label can vary slightly by PrestaShop version.
+3. Remove `X-Frame-Options: SAMEORIGIN` or `DENY` from checkout responses.
+4. If the shop sends Content Security Policy, allow the relevant BEMO app
+   origins in `frame-ancestors`, for example `https://bemo.now` and
+   `https://beta.bemo.now` during staging.
+5. Pair the shop again after changing these settings. Readiness is captured at
+   pairing time; BEMO does not weaken shop headers or cookie policy remotely.
+6. Complete a real sandbox order for every enabled payment method in desktop
+   Chrome and mobile Safari. A payment provider, 3-D Secure challenge, CDN, or
+   browser privacy policy can still require top-level navigation, so BEMO
+   always provides **Open in new tab** as a fallback.
+
+Quickly inspect the public response headers (replace the URL with the real
+checkout URL):
+
+```bash
+curl -sSI https://shop.example/checkout \
+  | grep -Ei 'x-frame-options|content-security-policy|set-cookie'
+```
+
+There must be no blocking `X-Frame-Options`; any `frame-ancestors` directive
+must include the BEMO origin; and the PrestaShop session cookie must be
+`Secure` with `SameSite=None`. The merchant's PrestaShop/payment provider
+remains the checkout and payment processor. BEMO never receives card details.
+
 ## Development
 
 The repository uses current PHP and Composer for dependency management while

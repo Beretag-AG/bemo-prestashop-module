@@ -194,13 +194,14 @@ class PairingService
     private function hasValidShopDetails($details)
     {
         if (!is_array($details)
-            || !isset($details['shopUrl'], $details['platformVersion'], $details['languageId'], $details['languages'], $details['currencies'])
+            || !isset($details['shopUrl'], $details['platformVersion'], $details['languageId'], $details['languages'], $details['currencies'], $details['embeddedCheckoutReady'])
             || !is_string($details['shopUrl'])
             || strlen($details['shopUrl']) > 2048
             || $this->endpoints->normalizeShopUrl($details['shopUrl']) === null
             || !is_string($details['platformVersion'])
             || !is_int($details['languageId'])
             || $details['languageId'] <= 0
+            || !is_bool($details['embeddedCheckoutReady'])
             || !preg_match('/^\d+(?:\.\d+){1,3}$/', $details['platformVersion'])) {
             return false;
         }

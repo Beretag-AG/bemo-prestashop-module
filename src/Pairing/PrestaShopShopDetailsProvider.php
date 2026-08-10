@@ -34,6 +34,7 @@ class PrestaShopShopDetailsProvider implements ShopDetailsProviderInterface
             (int) $shopId
         );
         $currencies = $this->currencyIsoCodes($shop, (int) $shopId);
+        $embeddedCheckoutReady = $this->isEmbeddedCheckoutReady($shop, (int) $shopId);
 
         if ($shopUrl === null || $languageId <= 0 || $languages === array() || $currencies === array()) {
             throw new PairingException(PairingException::SHOP_CONTEXT);
@@ -45,7 +46,28 @@ class PrestaShopShopDetailsProvider implements ShopDetailsProviderInterface
             'languageId' => $languageId,
             'languages' => $languages,
             'currencies' => $currencies,
+            'embeddedCheckoutReady' => $embeddedCheckoutReady,
         );
+    }
+
+    private function isEmbeddedCheckoutReady($shop, $shopId)
+    {
+        $sslEnabled = (bool) \Configuration::get(
+            'PS_SSL_ENABLED_EVERYWHERE',
+            null,
+            (int) $shop->id_shop_group,
+            $shopId
+        );
+        $sameSite = \Configuration::get(
+            'PS_COOKIE_SAMESITE',
+            null,
+            (int) $shop->id_shop_group,
+            $shopId
+        );
+
+        return $sslEnabled
+            && is_string($sameSite)
+            && strtolower($sameSite) === 'none';
     }
 
     private function canonicalShopUrl($shop, $shopId)

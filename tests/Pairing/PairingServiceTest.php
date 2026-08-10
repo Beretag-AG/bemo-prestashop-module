@@ -26,6 +26,7 @@ class PairingServiceTest extends TestCase
 
         self::assertSame(array(array(7, 'https://api.example.com')), $setup->calls);
         self::assertSame(2, $gateway->payload['languageId']);
+        self::assertTrue($gateway->payload['embeddedCheckoutReady']);
         self::assertSame('https://merchant.example/shop', $gateway->payload['shopUrl']);
         self::assertSame($configuration->credentials['webservice_key'], $gateway->payload['webserviceKey']);
         self::assertRegExp('/^[A-Za-z0-9_-]{22}$/', $gateway->payload['pairingToken']);
@@ -227,6 +228,7 @@ class FixedShopDetails implements ShopDetailsProviderInterface
             'languageId' => 2,
             'languages' => array('de', 'en'),
             'currencies' => array('EUR', 'CHF'),
+            'embeddedCheckoutReady' => true,
         );
     }
 }
