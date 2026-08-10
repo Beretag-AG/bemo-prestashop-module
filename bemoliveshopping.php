@@ -32,7 +32,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.3.0';
+    const VERSION = '0.3.1';
 
     /** @var string */
     private $output = '';
