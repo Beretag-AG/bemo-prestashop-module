@@ -17,6 +17,7 @@ for required in \
   bemoliveshopping/LICENSE.md \
   bemoliveshopping/config/autoload.php \
   bemoliveshopping/controllers/front/buy.php \
+  bemoliveshopping/controllers/front/productlinks.php \
   bemoliveshopping/src/Checkout/index.php \
   bemoliveshopping/src/Pairing/index.php \
   bemoliveshopping/src/Webhook/index.php \
