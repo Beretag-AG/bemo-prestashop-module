@@ -19,7 +19,7 @@ class DbOutboxRepository implements OutboxRepositoryInterface
     public function enqueue($shopId, $eventId, $rawPayload, $availableAt)
     {
         $now = date('Y-m-d H:i:s');
-        return (bool) $this->db->insert('bemoliveshopping_outbox', array(
+        $values = array(
             'id_shop' => (int) $shopId,
             // Db::insert escapes values. Pre-escaping JSON here would mutate
             // the exact bytes covered by the eventual HMAC.
@@ -30,7 +30,25 @@ class DbOutboxRepository implements OutboxRepositoryInterface
             'available_at' => date('Y-m-d H:i:s', (int) $availableAt),
             'date_add' => $now,
             'date_upd' => $now,
-        ));
+        );
+        $pendingId = (int) $this->db->getValue(
+            'SELECT `id_bemoliveshopping_outbox`'
+            . ' FROM `' . _DB_PREFIX_ . 'bemoliveshopping_outbox`'
+            . ' WHERE `id_shop` = ' . (int) $shopId
+            . " AND `status` = 'pending'"
+            . ' ORDER BY `id_bemoliveshopping_outbox` ASC'
+        );
+        if ($pendingId > 0) {
+            unset($values['date_add']);
+
+            return (bool) $this->db->update(
+                'bemoliveshopping_outbox',
+                $values,
+                '`id_bemoliveshopping_outbox` = ' . $pendingId
+            );
+        }
+
+        return (bool) $this->db->insert('bemoliveshopping_outbox', $values);
     }
 
     public function getDue($limit, $now)

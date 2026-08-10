@@ -75,22 +75,44 @@ class PairingServiceTest extends TestCase
         self::assertSame(0, $configuration->clearCalls);
     }
 
-    public function testDefinitiveRejectionClearsTheAttempt()
+    public function testDefinitiveRejectionRetriesWithAFreshToken()
     {
         $configuration = new PairingConfiguration();
         $gateway = new CapturingPairingGateway();
         $gateway->failReasons = array(PairingException::REJECTED);
         $service = $this->service($configuration, new PairingSetup(), $gateway);
 
+        $claimUrl = $service->start(7);
+
+        self::assertCount(2, $gateway->tokens);
+        self::assertNotSame($gateway->tokens[0], $gateway->tokens[1]);
+        self::assertStringContainsString($gateway->tokens[1], $claimUrl);
+        self::assertSame(2, $configuration->beginCalls);
+        self::assertSame(1, $configuration->clearCalls);
+        self::assertSame(1, $configuration->markCalls);
+    }
+
+    public function testRepeatedDefinitiveRejectionClearsTheFreshAttempt()
+    {
+        $configuration = new PairingConfiguration();
+        $gateway = new CapturingPairingGateway();
+        $gateway->failReasons = array(
+            PairingException::REJECTED,
+            PairingException::REJECTED,
+        );
+        $service = $this->service($configuration, new PairingSetup(), $gateway);
+
         try {
             $service->start(7);
-            self::fail('Expected the request to be rejected.');
+            self::fail('Expected the request to be rejected twice.');
         } catch (PairingException $exception) {
             self::assertSame(PairingException::REJECTED, $exception->getReason());
         }
 
         self::assertNull($configuration->attempt);
-        self::assertSame(1, $configuration->clearCalls);
+        self::assertSame(2, $configuration->beginCalls);
+        self::assertSame(2, $configuration->clearCalls);
+        self::assertSame(0, $configuration->markCalls);
     }
 
     private function service($configuration, $setup, $gateway, $developerMode = true)

@@ -62,31 +62,38 @@ class WebhookOutbox
         if (!$this->isAllowedEvent($hook, $resourceType) || (int) $resourceId <= 0) {
             return false;
         }
-        if (!is_array($this->configuration->getPairingCredentials($shopId))) {
-            return true;
-        }
-        $details = $this->shopDetails->get($shopId);
-        $occurredAt = (int) call_user_func($this->clock);
-        $eventId = $this->secrets->eventId();
-        $payload = json_encode(array(
-            'eventId' => $eventId,
-            'hook' => $hook,
-            'occurredAt' => $occurredAt * 1000,
-            'resourceId' => (int) $resourceId,
-            'resourceType' => $resourceType,
-            'shopId' => (int) $shopId,
-            'shopUrl' => $details['shopUrl'],
-        ));
-        if (!is_string($payload) || strlen($payload) > 16384) {
-            return false;
-        }
+        return $this->lock->synchronized('webhook-outbox', 0, function () use (
+            $hook,
+            $resourceId,
+            $resourceType,
+            $shopId
+        ) {
+            if (!is_array($this->configuration->getPairingCredentials($shopId))) {
+                return true;
+            }
+            $details = $this->shopDetails->get($shopId);
+            $occurredAt = (int) call_user_func($this->clock);
+            $eventId = $this->secrets->eventId();
+            $payload = json_encode(array(
+                'eventId' => $eventId,
+                'hook' => $hook,
+                'occurredAt' => $occurredAt * 1000,
+                'resourceId' => (int) $resourceId,
+                'resourceType' => $resourceType,
+                'shopId' => (int) $shopId,
+                'shopUrl' => $details['shopUrl'],
+            ));
+            if (!is_string($payload) || strlen($payload) > 16384) {
+                return false;
+            }
 
-        return $this->outbox->enqueue(
-            $shopId,
-            $eventId,
-            $payload,
-            $occurredAt
-        );
+            return $this->outbox->enqueue(
+                $shopId,
+                $eventId,
+                $payload,
+                $occurredAt
+            );
+        });
     }
 
     public function drain($limit = self::MAX_BATCH_SIZE)

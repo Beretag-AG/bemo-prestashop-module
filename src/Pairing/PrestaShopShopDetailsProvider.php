@@ -23,7 +23,9 @@ class PrestaShopShopDetailsProvider implements ShopDetailsProviderInterface
             throw new PairingException(PairingException::SHOP_CONTEXT);
         }
 
-        $shopUrl = $this->endpoints->normalizeShopUrl($shop->getBaseURL(true, true));
+        $shopUrl = $this->endpoints->normalizeShopUrl(
+            $this->canonicalShopUrl($shop, (int) $shopId)
+        );
         $languages = $this->languageIsoCodes((int) $shopId);
         $languageId = (int) \Configuration::get(
             'PS_LANG_DEFAULT',
@@ -44,6 +46,21 @@ class PrestaShopShopDetailsProvider implements ShopDetailsProviderInterface
             'languages' => $languages,
             'currencies' => $currencies,
         );
+    }
+
+    private function canonicalShopUrl($shop, $shopId)
+    {
+        $sslEnabled = (bool) \Configuration::get(
+            'PS_SSL_ENABLED',
+            null,
+            (int) $shop->id_shop_group,
+            $shopId
+        );
+        if ($sslEnabled && is_string($shop->domain_ssl) && $shop->domain_ssl !== '') {
+            return 'https://' . $shop->domain_ssl . $shop->getBaseURI();
+        }
+
+        return $shop->getBaseURL(true, true);
     }
 
     private function languageIsoCodes($shopId)

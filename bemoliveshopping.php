@@ -15,6 +15,7 @@ use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
 use Bemo\LiveShopping\Installation\Installer;
 use Bemo\LiveShopping\Lock\DbShopLock;
 use Bemo\LiveShopping\Pairing\CurlPairingGateway;
+use Bemo\LiveShopping\Pairing\EndpointEnvironment;
 use Bemo\LiveShopping\Pairing\EndpointNormalizer;
 use Bemo\LiveShopping\Pairing\EndpointPolicy;
 use Bemo\LiveShopping\Pairing\PairingException;
@@ -41,7 +42,7 @@ class Bemoliveshopping extends Module
         $this->name = 'bemoliveshopping';
         $this->tab = 'advertising_marketing';
         $this->version = self::VERSION;
-        $this->author = 'Beretag AG';
+        $this->author = 'BEMO';
         $this->need_instance = 0;
         $this->bootstrap = true;
         $this->dependencies = array('cronjobs');
@@ -267,11 +268,15 @@ class Bemoliveshopping extends Module
     {
         $normalizer = new EndpointNormalizer();
         $policy = new EndpointPolicy($normalizer, $this->isDeveloperMode());
+        $environment = new EndpointEnvironment();
+        $environmentValues = $environment->overrideValues($policy);
         $pair = $this->isDeveloperMode()
-            ? $policy->normalizePair(
-                Tools::getValue('BEMO_API_BASE_URL'),
-                Tools::getValue('BEMO_APP_BASE_URL')
-            )
+            ? ($environmentValues !== null
+                ? $policy->normalizePair($environmentValues[0], $environmentValues[1])
+                : $policy->normalizePair(
+                    Tools::getValue('BEMO_API_BASE_URL'),
+                    Tools::getValue('BEMO_APP_BASE_URL')
+                ))
             : $policy->normalizePair(
                 EndpointPolicy::PRODUCTION_API_BASE_URL,
                 EndpointPolicy::PRODUCTION_APP_BASE_URL
@@ -362,21 +367,30 @@ class Bemoliveshopping extends Module
         $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
         $helper->submit_action = 'submitBemoConfiguration';
         $helper->default_form_language = (int) Configuration::get('PS_LANG_DEFAULT');
+        $normalizer = new EndpointNormalizer();
+        $policy = new EndpointPolicy($normalizer, $this->isDeveloperMode());
+        $environmentValues = (new EndpointEnvironment())->overrideValues($policy);
         $helper->fields_value = array(
-            'BEMO_API_BASE_URL' => $this->isDeveloperMode()
-                ? $repository->getApiBaseUrl($shopId)
-                : EndpointPolicy::PRODUCTION_API_BASE_URL,
-            'BEMO_APP_BASE_URL' => $this->isDeveloperMode()
-                ? $repository->getAppBaseUrl($shopId)
-                : EndpointPolicy::PRODUCTION_APP_BASE_URL,
+            'BEMO_API_BASE_URL' => $environmentValues !== null
+                ? $environmentValues[0]
+                : ($this->isDeveloperMode()
+                    ? $repository->getApiBaseUrl($shopId)
+                    : EndpointPolicy::PRODUCTION_API_BASE_URL),
+            'BEMO_APP_BASE_URL' => $environmentValues !== null
+                ? $environmentValues[1]
+                : ($this->isDeveloperMode()
+                    ? $repository->getAppBaseUrl($shopId)
+                    : EndpointPolicy::PRODUCTION_APP_BASE_URL),
             'BEMO_CONFIRM_WEBSERVICE' => 0,
         );
 
-        return $helper->generateForm(array($this->configurationForm()));
+        return $helper->generateForm(array($this->configurationForm($environmentValues !== null)));
     }
 
-    private function configurationForm()
+    private function configurationForm($environmentEndpointsLocked = false)
     {
+        $endpointsReadonly = !$this->isDeveloperMode() || $environmentEndpointsLocked;
+
         return array(
             'form' => array(
                 'legend' => array(
@@ -392,14 +406,14 @@ class Bemoliveshopping extends Module
                         'label' => $this->l('BEMO API URL'),
                         'name' => 'BEMO_API_BASE_URL',
                         'required' => true,
-                        'readonly' => !$this->isDeveloperMode(),
+                        'readonly' => $endpointsReadonly,
                     ),
                     array(
                         'type' => 'text',
                         'label' => $this->l('BEMO app URL'),
                         'name' => 'BEMO_APP_BASE_URL',
                         'required' => true,
-                        'readonly' => !$this->isDeveloperMode(),
+                        'readonly' => $endpointsReadonly,
                     ),
                     array(
                         'type' => 'switch',

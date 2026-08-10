@@ -29,6 +29,18 @@ for required in \
   fi
 done
 
+if ! unzip -p "$artifact" bemoliveshopping/config.xml \
+  | grep -F '<author><![CDATA[BEMO]]></author>' >/dev/null; then
+  echo "Packaged module metadata must identify the author as BEMO." >&2
+  exit 1
+fi
+
+if ! unzip -p "$artifact" bemoliveshopping/bemoliveshopping.php \
+  | grep -F "\$this->author = 'BEMO';" >/dev/null; then
+  echo "Packaged module runtime metadata must identify the author as BEMO." >&2
+  exit 1
+fi
+
 for excluded in tests/ docs/ .github/; do
   if grep -F "$excluded" <<<"$entries" >/dev/null; then
     echo "Archive unexpectedly includes $excluded." >&2

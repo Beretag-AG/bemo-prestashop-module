@@ -132,20 +132,43 @@ class PairingService
         $payload['webhookSecret'] = $credentials['webhook_secret'];
         $payload['buyLinkSecret'] = $credentials['buy_link_secret'];
 
-        try {
-            $expiresAt = $this->gateway->start($apiBaseUrl, $payload);
-        } catch (PairingException $exception) {
-            if ($exception->getReason() === PairingException::REJECTED
-                || $exception->getReason() === PairingException::INVALID_RESPONSE) {
-                $this->configuration->clearPairingAttempt($shopId, $pairingToken);
-            }
-            throw $exception;
-        }
+        list($expiresAt, $pairingToken) = $this->startGatewayWithFreshTokenRetry(
+            $shopId,
+            $apiBaseUrl,
+            $payload,
+            $pairingToken
+        );
         if (!$this->configuration->markPairingStarted($shopId, $pairingToken, $expiresAt)) {
             throw new PairingException(PairingException::PERSISTENCE);
         }
 
         return $appBaseUrl . self::CLAIM_PATH . '?pair=' . rawurlencode($pairingToken);
+    }
+
+    private function startGatewayWithFreshTokenRetry($shopId, $apiBaseUrl, array $payload, $pairingToken)
+    {
+        for ($attemptNumber = 0; $attemptNumber < 2; ++$attemptNumber) {
+            $payload['pairingToken'] = $pairingToken;
+            try {
+                return array($this->gateway->start($apiBaseUrl, $payload), $pairingToken);
+            } catch (PairingException $exception) {
+                $isDefinitive = $exception->getReason() === PairingException::REJECTED
+                    || $exception->getReason() === PairingException::INVALID_RESPONSE;
+                if (!$isDefinitive) {
+                    throw $exception;
+                }
+                $this->configuration->clearPairingAttempt($shopId, $pairingToken);
+                if ($attemptNumber === 1) {
+                    throw $exception;
+                }
+                $pairingToken = $this->secrets->pairingToken();
+                if (!$this->configuration->beginPairingAttempt($shopId, $pairingToken)) {
+                    throw new PairingException(PairingException::PERSISTENCE);
+                }
+            }
+        }
+
+        throw new PairingException(PairingException::REJECTED);
     }
 
     private function hasCompleteCredentials($credentials, $apiBaseUrl)

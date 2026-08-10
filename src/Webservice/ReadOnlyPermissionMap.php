@@ -10,6 +10,7 @@ class ReadOnlyPermissionMap
 {
     const RESOURCES = array(
         'products',
+        'categories',
         'combinations',
         'stock_availables',
         'specific_prices',
