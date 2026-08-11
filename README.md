@@ -66,7 +66,9 @@ To install it in a development or staging shop:
 4. Open **BEMO Live Shopping → Configure**.
 5. Confirm the production BEMO endpoints. Custom endpoints are available only
    when PrestaShop developer mode is enabled.
-6. Review the Webservice notice and explicitly activate the BEMO account.
+6. Review the two choices, click **Save settings** to keep them without
+   connecting, or click **Save and connect to BEMO** to provision read-only
+   access and choose the BEMO account for this shop.
 
 Keep the Cron tasks manager active so queued catalog events are drained. Use
 its Advanced mode when the hosting platform already provides a scheduler.
@@ -115,7 +117,7 @@ process or store those details in this flow.
 Ask the merchant or hosting provider to complete these steps on a staging copy
 before BEMO enables embedded checkout on the live shop:
 
-1. Install or upgrade **BEMO Live Shopping 0.3.3 or newer** and keep **Cron
+1. Install or upgrade **BEMO Live Shopping 0.3.4 or newer** and keep **Cron
    tasks manager** active.
 2. Enable HTTPS for the entire storefront, including cart, checkout, payment,
    return, and confirmation pages.
@@ -128,7 +130,7 @@ before BEMO enables embedded checkout on the live shop:
    `X-Frame-Options`; when CSP is used, include the BEMO origin in
    `frame-ancestors`.
 5. Re-pair the shop from the BEMO module configuration page after those
-   settings are live. Select **Yes** for **Request checkout inside BEMO** only
+   settings are live. Select **Yes** for **Show checkout inside BEMO** only
    after the header and cookie checks pass. BEMO enables it only after the
    staging review is recorded by an admin.
 6. From a legitimate viewer account, test one highlighted product and finish

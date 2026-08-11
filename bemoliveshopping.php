@@ -32,7 +32,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.3.3';
+    const VERSION = '0.3.4';
 
     /** @var string */
     private $output = '';
@@ -101,6 +101,11 @@ class Bemoliveshopping extends Module
     {
         return (new Installer(Db::getInstance()))->upgradeToVersion030()
             && $this->registerBemoHooks();
+    }
+
+    public function upgradeToVersion034()
+    {
+        return (new Installer(Db::getInstance()))->upgradeToVersion034();
     }
 
     public function getContent()
@@ -204,12 +209,16 @@ class Bemoliveshopping extends Module
             return;
         }
 
-        $this->output .= $this->displayConfirmation($this->l('BEMO configuration saved.'));
+        if (!$this->saveActivationChoices()) {
+            return;
+        }
+
+        $this->output .= $this->displayConfirmation($this->l('BEMO module settings saved.'));
     }
 
     private function activateBemoAccount()
     {
-        if (!Tools::getValue('BEMO_CONFIRM_WEBSERVICE')) {
+        if (!$this->requestedChoice('BEMO_CONFIRM_WEBSERVICE')) {
             $this->output .= $this->displayError(
                 $this->l('Confirm that you understand the PrestaShop Webservice will be enabled for this shop.')
             );
@@ -218,7 +227,7 @@ class Bemoliveshopping extends Module
         }
 
         $endpoints = $this->validatedEndpointsFromRequest();
-        if ($endpoints === null || !$this->saveEndpoints($endpoints)) {
+        if ($endpoints === null || !$this->saveEndpoints($endpoints) || !$this->saveActivationChoices()) {
             return;
         }
 
@@ -246,7 +255,7 @@ class Bemoliveshopping extends Module
             ),
             new PrestaShopShopDetailsProvider(
                 $endpoints,
-                Tools::getValue('BEMO_CONFIRM_EMBEDDED_CHECKOUT')
+                $repository->isEmbeddedCheckoutRequested($shopId)
             ),
             $secrets,
             $endpoints,
@@ -334,6 +343,28 @@ class Bemoliveshopping extends Module
         return true;
     }
 
+    private function saveActivationChoices()
+    {
+        $repository = new DbConfigurationRepository(Db::getInstance());
+        $saved = $repository->saveActivationChoices(
+            (int) $this->context->shop->id,
+            $this->requestedChoice('BEMO_CONFIRM_WEBSERVICE'),
+            $this->requestedChoice('BEMO_CONFIRM_EMBEDDED_CHECKOUT')
+        );
+        if (!$saved) {
+            $this->output .= $this->displayError($this->l('The BEMO module settings could not be saved.'));
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function requestedChoice($name)
+    {
+        return (string) Tools::getValue($name) === '1';
+    }
+
     private function pairingErrorMessage($reason)
     {
         if ($reason === PairingException::RATE_LIMITED) {
@@ -384,8 +415,8 @@ class Bemoliveshopping extends Module
                 : ($this->isDeveloperMode()
                     ? $repository->getAppBaseUrl($shopId)
                     : EndpointPolicy::PRODUCTION_APP_BASE_URL),
-            'BEMO_CONFIRM_WEBSERVICE' => 0,
-            'BEMO_CONFIRM_EMBEDDED_CHECKOUT' => 0,
+            'BEMO_CONFIRM_WEBSERVICE' => $repository->isWebserviceAccessApproved($shopId) ? 1 : 0,
+            'BEMO_CONFIRM_EMBEDDED_CHECKOUT' => $repository->isEmbeddedCheckoutRequested($shopId) ? 1 : 0,
         );
 
         return $helper->generateForm(array($this->configurationForm($environmentValues !== null)));
@@ -398,11 +429,11 @@ class Bemoliveshopping extends Module
         return array(
             'form' => array(
                 'legend' => array(
-                    'title' => $this->l('BEMO connection'),
+                    'title' => $this->l('Connect this shop to BEMO'),
                     'icon' => 'icon-link',
                 ),
                 'description' => $this->l(
-                    'BEMO needs a minimal read-only Webservice account. Provisioning is an explicit action because it enables the shop-wide PrestaShop Webservice.'
+                    'Choose the checkout experience, save your preferences, then connect this shop to the BEMO account that should use its catalog.'
                 ),
                 'input' => array(
                     array(
@@ -421,9 +452,12 @@ class Bemoliveshopping extends Module
                     ),
                     array(
                         'type' => 'switch',
-                        'label' => $this->l('Enable and provision Webservice access'),
+                        'label' => $this->l('Allow read-only catalog access'),
                         'name' => 'BEMO_CONFIRM_WEBSERVICE',
                         'is_bool' => true,
+                        'desc' => $this->l(
+                            'Required to connect. BEMO enables the PrestaShop Webservice and creates a module-owned read-only key only when you click Save and connect to BEMO.'
+                        ),
                         'values' => array(
                             array('id' => 'bemo_ws_on', 'value' => 1, 'label' => $this->l('Yes')),
                             array('id' => 'bemo_ws_off', 'value' => 0, 'label' => $this->l('No')),
@@ -431,11 +465,11 @@ class Bemoliveshopping extends Module
                     ),
                     array(
                         'type' => 'switch',
-                        'label' => $this->l('Request checkout inside BEMO'),
+                        'label' => $this->l('Show checkout inside BEMO'),
                         'name' => 'BEMO_CONFIRM_EMBEDDED_CHECKOUT',
                         'is_bool' => true,
                         'desc' => $this->l(
-                            'Confirm that checkout cookies are Secure, SameSite=None and Partitioned, and that framing headers allow the configured BEMO app URL. BEMO enables this only after staging review; otherwise the shop opens in a new tab.'
+                            'Choose Yes to request the checkout modal. Your shop must use HTTPS, cross-site checkout cookies, and framing headers that allow BEMO. BEMO reviews this once per shop; until approval, checkout safely opens in a new tab.'
                         ),
                         'values' => array(
                             array('id' => 'bemo_embed_on', 'value' => 1, 'label' => $this->l('Yes')),
@@ -445,7 +479,7 @@ class Bemoliveshopping extends Module
                 ),
                 'buttons' => array(
                     array(
-                        'title' => $this->l('Activate BEMO account'),
+                        'title' => $this->l('Save and connect to BEMO'),
                         'name' => 'submitBemoActivateAccount',
                         'type' => 'submit',
                         'class' => 'btn btn-default pull-left',
@@ -453,7 +487,7 @@ class Bemoliveshopping extends Module
                     ),
                 ),
                 'submit' => array(
-                    'title' => $this->l('Save'),
+                    'title' => $this->l('Save settings'),
                 ),
             ),
         );

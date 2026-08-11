@@ -37,6 +37,24 @@ class DbConfigurationRepository implements ConfigurationRepositoryInterface
         ));
     }
 
+    public function saveActivationChoices($shopId, $webserviceAccessApproved, $embeddedCheckoutRequested)
+    {
+        return $this->upsert($shopId, array(
+            'webservice_access_approved' => $webserviceAccessApproved ? 1 : 0,
+            'embedded_checkout_requested' => $embeddedCheckoutRequested ? 1 : 0,
+        ));
+    }
+
+    public function isWebserviceAccessApproved($shopId)
+    {
+        return $this->getBooleanSetting($shopId, 'webservice_access_approved');
+    }
+
+    public function isEmbeddedCheckoutRequested($shopId)
+    {
+        return $this->getBooleanSetting($shopId, 'embedded_checkout_requested');
+    }
+
     public function getWebserviceAccountId($shopId)
     {
         $value = $this->db->getValue(
@@ -231,5 +249,13 @@ class DbConfigurationRepository implements ConfigurationRepositoryInterface
         );
 
         return is_string($value) && $value !== '' ? $value : $default;
+    }
+
+    private function getBooleanSetting($shopId, $column)
+    {
+        return (bool) $this->db->getValue(
+            'SELECT `' . $column . '` FROM `' . _DB_PREFIX_ . 'bemoliveshopping_configuration`'
+            . ' WHERE `id_shop` = ' . (int) $shopId
+        );
     }
 }

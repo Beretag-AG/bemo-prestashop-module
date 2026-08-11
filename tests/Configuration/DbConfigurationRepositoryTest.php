@@ -46,6 +46,19 @@ class DbConfigurationRepositoryTest extends TestCase
         self::assertSame('`id_shop` = 7', $db->updatedWhere);
     }
 
+    public function testSavesAndLoadsTheActivationChoicesForTheShop()
+    {
+        $db = new ConfigurationDb();
+        $db->values = array(1, 1, 0);
+        $repository = new DbConfigurationRepository($db);
+
+        self::assertTrue($repository->saveActivationChoices(7, true, false));
+        self::assertSame(1, $db->updatedValues['webservice_access_approved']);
+        self::assertSame(0, $db->updatedValues['embedded_checkout_requested']);
+        self::assertTrue($repository->isWebserviceAccessApproved(7));
+        self::assertFalse($repository->isEmbeddedCheckoutRequested(7));
+    }
+
     public function testReturnsCredentialsOnlyWhenEveryDirectionIsPresent()
     {
         $db = new ConfigurationDb();

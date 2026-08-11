@@ -40,6 +40,8 @@ class Installer
             `id_shop` INT UNSIGNED NOT NULL,
             `api_base_url` VARCHAR(255) NOT NULL DEFAULT \'https://actions.bemo.now\',
             `app_base_url` VARCHAR(255) NOT NULL DEFAULT \'https://bemo.now\',
+            `webservice_access_approved` TINYINT(1) UNSIGNED NOT NULL DEFAULT 0,
+            `embedded_checkout_requested` TINYINT(1) UNSIGNED NOT NULL DEFAULT 0,
             `webservice_account_id` INT UNSIGNED DEFAULT NULL,
             `webservice_key` CHAR(32) DEFAULT NULL,
             `credentials_api_base_url` VARCHAR(255) DEFAULT NULL,
@@ -133,6 +135,42 @@ class Installer
         }
 
         return (bool) $this->db->execute($this->outboxTableSql());
+    }
+
+    public function upgradeToVersion034()
+    {
+        $columns = $this->db->executeS(
+            'SHOW COLUMNS FROM `' . _DB_PREFIX_ . 'bemoliveshopping_configuration`'
+        );
+        if (!is_array($columns)) {
+            return false;
+        }
+
+        $existing = array();
+        foreach ($columns as $column) {
+            if (isset($column['Field'])) {
+                $existing[] = $column['Field'];
+            }
+        }
+
+        if (!in_array('webservice_access_approved', $existing, true)
+            && !$this->db->execute(
+                'ALTER TABLE `' . _DB_PREFIX_ . 'bemoliveshopping_configuration`'
+                . ' ADD `webservice_access_approved` TINYINT(1) UNSIGNED NOT NULL DEFAULT 0'
+                . ' AFTER `app_base_url`'
+            )) {
+            return false;
+        }
+        if (!in_array('embedded_checkout_requested', $existing, true)
+            && !$this->db->execute(
+                'ALTER TABLE `' . _DB_PREFIX_ . 'bemoliveshopping_configuration`'
+                . ' ADD `embedded_checkout_requested` TINYINT(1) UNSIGNED NOT NULL DEFAULT 0'
+                . ' AFTER `webservice_access_approved`'
+            )) {
+            return false;
+        }
+
+        return true;
     }
 
     public function uninstall()

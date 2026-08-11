@@ -17,6 +17,8 @@ class InstallerTest extends TestCase
         self::assertStringContainsString('https://actions.bemo.now', $db->executed[0]);
         self::assertStringContainsString('`credentials_api_base_url`', $db->executed[0]);
         self::assertStringContainsString('`pairing_expires_at`', $db->executed[0]);
+        self::assertStringContainsString('`webservice_access_approved`', $db->executed[0]);
+        self::assertStringContainsString('`embedded_checkout_requested`', $db->executed[0]);
         self::assertStringContainsString('bemoliveshopping_outbox', $db->executed[1]);
         self::assertStringContainsString('UNIQUE KEY `uniq_bemoliveshopping_event`', $db->executed[1]);
         self::assertStringContainsString('`status`, `available_at`', $db->executed[1]);
@@ -45,6 +47,15 @@ class InstallerTest extends TestCase
         $db->columns = array(array('Field' => 'app_base_url'));
         self::assertTrue($installer->upgradeToVersion020());
         self::assertCount(1, $db->executed);
+    }
+
+    public function testUpgradeAddsPersistentActivationChoices()
+    {
+        $db = new InstallerDb();
+
+        self::assertTrue((new Installer($db))->upgradeToVersion034());
+        self::assertStringContainsString('webservice_access_approved', $db->executed[0]);
+        self::assertStringContainsString('embedded_checkout_requested', $db->executed[1]);
     }
 
     public function testInstallRollsBackConfigurationTableWhenOutboxCreationFails()
