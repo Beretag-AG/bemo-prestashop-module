@@ -16,6 +16,7 @@ class PairingContractFixtureTest extends TestCase
         self::assertSame(array(
             'buyLinkSecret',
             'currencies',
+            'embeddedCheckoutReady',
             'languageId',
             'languages',
             'pairingToken',
@@ -24,6 +25,7 @@ class PairingContractFixtureTest extends TestCase
             'webhookSecret',
             'webserviceKey',
         ), $keys);
+        self::assertTrue($payload['embeddedCheckoutReady']);
         self::assertRegExp('/^[A-Za-z0-9_-]{22}$/', $payload['pairingToken']);
         self::assertSame(32, strlen($payload['webserviceKey']));
         self::assertSame(43, strlen($payload['webhookSecret']));

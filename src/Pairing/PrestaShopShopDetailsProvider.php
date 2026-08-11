@@ -11,9 +11,13 @@ class PrestaShopShopDetailsProvider implements ShopDetailsProviderInterface
     /** @var EndpointNormalizer */
     private $endpoints;
 
-    public function __construct(EndpointNormalizer $endpoints)
+    /** @var bool */
+    private $embeddedCheckoutConfirmed;
+
+    public function __construct(EndpointNormalizer $endpoints, $embeddedCheckoutConfirmed = false)
     {
         $this->endpoints = $endpoints;
+        $this->embeddedCheckoutConfirmed = (bool) $embeddedCheckoutConfirmed;
     }
 
     public function get($shopId)
@@ -23,7 +27,9 @@ class PrestaShopShopDetailsProvider implements ShopDetailsProviderInterface
             throw new PairingException(PairingException::SHOP_CONTEXT);
         }
 
-        $shopUrl = $this->endpoints->normalizeShopUrl($shop->getBaseURL(true, true));
+        $shopUrl = $this->endpoints->normalizeShopUrl(
+            $this->canonicalShopUrl($shop, (int) $shopId)
+        );
         $languages = $this->languageIsoCodes((int) $shopId);
         $languageId = (int) \Configuration::get(
             'PS_LANG_DEFAULT',
@@ -32,6 +38,7 @@ class PrestaShopShopDetailsProvider implements ShopDetailsProviderInterface
             (int) $shopId
         );
         $currencies = $this->currencyIsoCodes($shop, (int) $shopId);
+        $embeddedCheckoutReady = $this->isEmbeddedCheckoutReady($shop, (int) $shopId);
 
         if ($shopUrl === null || $languageId <= 0 || $languages === array() || $currencies === array()) {
             throw new PairingException(PairingException::SHOP_CONTEXT);
@@ -43,7 +50,44 @@ class PrestaShopShopDetailsProvider implements ShopDetailsProviderInterface
             'languageId' => $languageId,
             'languages' => $languages,
             'currencies' => $currencies,
+            'embeddedCheckoutReady' => $embeddedCheckoutReady,
         );
+    }
+
+    private function isEmbeddedCheckoutReady($shop, $shopId)
+    {
+        $sslEnabled = (bool) \Configuration::get(
+            'PS_SSL_ENABLED_EVERYWHERE',
+            null,
+            (int) $shop->id_shop_group,
+            $shopId
+        );
+        $sameSite = \Configuration::get(
+            'PS_COOKIE_SAMESITE',
+            null,
+            (int) $shop->id_shop_group,
+            $shopId
+        );
+
+        return $this->embeddedCheckoutConfirmed
+            && $sslEnabled
+            && is_string($sameSite)
+            && strtolower($sameSite) === 'none';
+    }
+
+    private function canonicalShopUrl($shop, $shopId)
+    {
+        $sslEnabled = (bool) \Configuration::get(
+            'PS_SSL_ENABLED',
+            null,
+            (int) $shop->id_shop_group,
+            $shopId
+        );
+        if ($sslEnabled && is_string($shop->domain_ssl) && $shop->domain_ssl !== '') {
+            return 'https://' . $shop->domain_ssl . $shop->getBaseURI();
+        }
+
+        return $shop->getBaseURL(true, true);
     }
 
     private function languageIsoCodes($shopId)

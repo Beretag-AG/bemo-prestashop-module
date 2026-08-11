@@ -38,7 +38,7 @@ class BemoliveshoppingBuyModuleFrontController extends ModuleFrontController
         $product = new Product($productId, false, (int) $this->context->language->id, $shopId);
         if (!Validate::isLoadedObject($product)
             || !(bool) $product->active
-            || !Product::isAssociatedToShop($productId, $shopId)) {
+            || !$product->isAssociatedToShop($shopId)) {
             $this->redirectToNotFound();
         }
 

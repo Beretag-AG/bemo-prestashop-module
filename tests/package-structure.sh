@@ -17,17 +17,31 @@ for required in \
   bemoliveshopping/LICENSE.md \
   bemoliveshopping/config/autoload.php \
   bemoliveshopping/controllers/front/buy.php \
+  bemoliveshopping/controllers/front/productlinks.php \
   bemoliveshopping/src/Checkout/index.php \
   bemoliveshopping/src/Pairing/index.php \
   bemoliveshopping/src/Webhook/index.php \
   bemoliveshopping/upgrade/index.php \
   bemoliveshopping/upgrade/upgrade-0.2.0.php \
-  bemoliveshopping/upgrade/upgrade-0.3.0.php; do
+  bemoliveshopping/upgrade/upgrade-0.3.0.php \
+  bemoliveshopping/upgrade/upgrade-0.3.1.php; do
   if ! grep -Fx "$required" <<<"$entries" >/dev/null; then
     echo "Archive is missing $required." >&2
     exit 1
   fi
 done
+
+if ! unzip -p "$artifact" bemoliveshopping/config.xml \
+  | grep -F '<author><![CDATA[BEMO]]></author>' >/dev/null; then
+  echo "Packaged module metadata must identify the author as BEMO." >&2
+  exit 1
+fi
+
+if ! unzip -p "$artifact" bemoliveshopping/bemoliveshopping.php \
+  | grep -F "\$this->author = 'BEMO';" >/dev/null; then
+  echo "Packaged module runtime metadata must identify the author as BEMO." >&2
+  exit 1
+fi
 
 for excluded in tests/ docs/ .github/; do
   if grep -F "$excluded" <<<"$entries" >/dev/null; then
