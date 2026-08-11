@@ -353,7 +353,7 @@ class Bemoliveshopping extends Module
         }
 
         if ($reason === PairingException::CREDENTIALS || $reason === PairingException::PERSISTENCE) {
-            return $this->l('The BEMO credentials could not be prepared safely. Retry activation or contact BEMO support.');
+            return $this->l('The BEMO credentials could not be prepared. Retry activation or contact BEMO support.');
         }
 
         return $this->l('BEMO rejected the activation request. Retry to create a fresh pairing link.');
@@ -431,11 +431,11 @@ class Bemoliveshopping extends Module
                     ),
                     array(
                         'type' => 'switch',
-                        'label' => $this->l('Allow checkout inside BEMO'),
+                        'label' => $this->l('Request checkout inside BEMO'),
                         'name' => 'BEMO_CONFIRM_EMBEDDED_CHECKOUT',
                         'is_bool' => true,
                         'desc' => $this->l(
-                            'Confirm that checkout cookies are Secure, SameSite=None and Partitioned, and that framing headers allow the configured BEMO app URL. Otherwise BEMO will open the shop in a new tab.'
+                            'Confirm that checkout cookies are Secure, SameSite=None and Partitioned, and that framing headers allow the configured BEMO app URL. BEMO enables this only after staging review; otherwise the shop opens in a new tab.'
                         ),
                         'values' => array(
                             array('id' => 'bemo_embed_on', 'value' => 1, 'label' => $this->l('Yes')),

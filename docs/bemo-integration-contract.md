@@ -31,16 +31,24 @@ or optional-capability work. They do not block this module foundation.
 ## Cross-repository invariants
 
 - Technical module name: `bemoliveshopping`.
-- One PrestaShop shop pairs with one authenticated BEMO creator account.
+- Multiple authenticated BEMO creators may independently pair the same
+  PrestaShop shop. Each creator has a separate BEMO connection and disconnects
+  independently; one verified webhook fans out to every active matching
+  connection.
 - The pairing token is 128-bit, expires after 15 minutes, and is single-use.
 - `webhookSecret` authenticates shop-to-BEMO requests.
 - `buyLinkSecret` authenticates BEMO-to-shop requests.
 - Secrets are generated and rotated independently.
+- Re-pairing the same creator and normalized shop refreshes only that creator's
+  BEMO connection. The module's shop-scoped webhook and buy-link secrets are
+  shared by all creator connections for that shop; rotating either requires
+  every affected creator connection to pair again.
 - Webhook handlers enqueue a stable event ID and return; network delivery is
   drained outside the merchant request.
 - Webhook delivery is at-least-once and BEMO ingestion is idempotent.
-- Link-out checkout is the guaranteed purchase mode. Embedding is an optional
-  capability earned by separate browser and merchant acceptance tests.
+- Link-out checkout is the baseline purchase mode. Embedding is optional: the
+  module requests it, then a BEMO admin records approval after separate browser
+  and merchant acceptance tests.
 
 ## Signed purchase-link limits
 

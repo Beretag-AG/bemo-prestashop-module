@@ -74,8 +74,8 @@ its Advanced mode when the hosting platform already provides a scheduler.
 ## Embedded checkout
 
 BEMO can keep PrestaShop checkout inside the live session, but the shop must
-explicitly be ready for a cross-site iframe. Otherwise BEMO safely opens the
-canonical product page in a new tab.
+explicitly request a cross-site iframe and pass BEMO's staging review.
+Otherwise the canonical product page opens in a new tab.
 
 Before pairing a shop for embedded checkout:
 
@@ -106,8 +106,9 @@ must include the BEMO origin; and the PrestaShop session and cart cookies must
 be `Secure` with `SameSite=None; Partitioned`. PrestaShop 8 does not emit the
 `Partitioned` attribute itself on PHP 8.1, so configure it at the host, reverse
 proxy, or CDN for secure storefront cookies. The merchant's PrestaShop/payment
-provider remains the checkout and payment processor. BEMO never receives card
-details.
+provider remains the checkout and payment processor. Payment details are
+submitted directly to the shop or its payment provider; BEMO's servers do not
+process or store those details in this flow.
 
 ### Merchant handoff checklist
 
@@ -127,9 +128,9 @@ before BEMO enables embedded checkout on the live shop:
    `X-Frame-Options`; when CSP is used, include the BEMO origin in
    `frame-ancestors`.
 5. Re-pair the shop from the BEMO module configuration page after those
-   settings are live. Select **Yes** for **Allow checkout inside BEMO** only
-   after the header and cookie checks pass. BEMO records readiness only during
-   pairing.
+   settings are live. Select **Yes** for **Request checkout inside BEMO** only
+   after the header and cookie checks pass. BEMO enables it only after the
+   staging review is recorded by an admin.
 6. From a legitimate viewer account, test one highlighted product and finish
    a sandbox order in the BEMO dialog and with **Open in new tab**, for every
    enabled payment method and 3-D Secure flow.
@@ -138,6 +139,13 @@ For production use `https://bemo.now`; for BEMO staging use
 `https://beta.bemo.now`. If any part of the merchant's checkout stack cannot be
 framed, keep the connection in `link_out` mode. The normal top-level checkout
 remains the supported fallback.
+
+### Merchant responsibilities
+
+The merchant remains responsible for payment-provider configuration, taxes,
+shipping, fulfillment, refunds, customer terms and privacy notices, and the
+legal or regulatory obligations of the storefront. Review checkout terms and
+seek appropriate legal advice before enabling a live shop.
 
 ## Development
 
