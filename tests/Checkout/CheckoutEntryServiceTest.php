@@ -4,23 +4,36 @@ namespace Bemo\LiveShopping\Tests\Checkout;
 
 use Bemo\LiveShopping\Checkout\CartCheckoutGatewayInterface;
 use Bemo\LiveShopping\Checkout\CheckoutEntryService;
+use Bemo\LiveShopping\Checkout\CheckoutLanding;
 use PHPUnit\Framework\TestCase;
 
 class CheckoutEntryServiceTest extends TestCase
 {
-    public function testCreatesACartAddsTheDefaultCombinationAndEntersCheckout()
+    public function testCreatesACartAddsTheDefaultCombinationAndOpensTheCartByDefault()
     {
         $gateway = new CheckoutEntryServiceGateway();
         $gateway->combinationId = 24;
         $gateway->quantity = 2;
         $gateway->cart = (object) array('id' => 71);
 
-        $checkoutUrl = (new CheckoutEntryService($gateway))->enter(119);
+        $landingUrl = (new CheckoutEntryService($gateway))->enter(119);
 
-        self::assertSame('https://shop.example/order', $checkoutUrl);
+        self::assertSame('https://shop.example/cart?action=show', $landingUrl);
         self::assertSame(array(119, 24, 2), $gateway->addedProduct);
         self::assertSame($gateway->cart, $gateway->persistedCart);
         self::assertSame(1, $gateway->cartRequests);
+        self::assertSame(CheckoutLanding::CART, $gateway->requestedLanding);
+    }
+
+    public function testCanContinueDirectlyToCheckout()
+    {
+        $gateway = new CheckoutEntryServiceGateway();
+        $gateway->cart = (object) array('id' => 71);
+
+        $url = (new CheckoutEntryService($gateway))->enter(119, CheckoutLanding::CHECKOUT);
+
+        self::assertSame('https://shop.example/order', $url);
+        self::assertSame(CheckoutLanding::CHECKOUT, $gateway->requestedLanding);
     }
 
     public function testReusesTheCurrentCartWithoutChangingUnrelatedLines()
@@ -28,7 +41,7 @@ class CheckoutEntryServiceTest extends TestCase
         $gateway = new CheckoutEntryServiceGateway();
         $gateway->cart = (object) array('id' => 71, 'unrelatedLineCount' => 3);
 
-        self::assertSame('https://shop.example/order', (new CheckoutEntryService($gateway))->enter(119));
+        self::assertSame('https://shop.example/cart?action=show', (new CheckoutEntryService($gateway))->enter(119));
         self::assertSame(array(119, 0, 1), $gateway->addedProduct);
         self::assertSame(3, $gateway->cart->unrelatedLineCount);
         self::assertSame(1, $gateway->cartRequests);
@@ -40,7 +53,7 @@ class CheckoutEntryServiceTest extends TestCase
         $gateway->cart = (object) array('id' => 71);
         $gateway->hasProductLine = true;
 
-        self::assertSame('https://shop.example/order', (new CheckoutEntryService($gateway))->enter(119));
+        self::assertSame('https://shop.example/cart?action=show', (new CheckoutEntryService($gateway))->enter(119));
         self::assertNull($gateway->addedProduct);
         self::assertSame($gateway->cart, $gateway->persistedCart);
     }
@@ -88,6 +101,7 @@ class CheckoutEntryServiceGateway implements CartCheckoutGatewayInterface
     public $addedProduct;
     public $persistedCart;
     public $cartRequests = 0;
+    public $requestedLanding;
 
     public function getDefaultCombinationId($productId)
     {
@@ -130,8 +144,12 @@ class CheckoutEntryServiceGateway implements CartCheckoutGatewayInterface
         return true;
     }
 
-    public function getCheckoutUrl()
+    public function getLandingUrl($landing)
     {
-        return 'https://shop.example/order';
+        $this->requestedLanding = $landing;
+
+        return $landing === CheckoutLanding::CHECKOUT
+            ? 'https://shop.example/order'
+            : 'https://shop.example/cart?action=show';
     }
 }

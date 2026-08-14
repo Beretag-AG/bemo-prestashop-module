@@ -42,6 +42,7 @@ class Installer
             `app_base_url` VARCHAR(255) NOT NULL DEFAULT \'https://bemo.now\',
             `webservice_access_approved` TINYINT(1) UNSIGNED NOT NULL DEFAULT 0,
             `embedded_checkout_requested` TINYINT(1) UNSIGNED NOT NULL DEFAULT 0,
+            `checkout_landing` VARCHAR(16) NOT NULL DEFAULT \'cart\',
             `webservice_account_id` INT UNSIGNED DEFAULT NULL,
             `webservice_key` CHAR(32) DEFAULT NULL,
             `credentials_api_base_url` VARCHAR(255) DEFAULT NULL,
@@ -171,6 +172,24 @@ class Installer
         }
 
         return true;
+    }
+
+    public function upgradeToVersion040()
+    {
+        $columns = $this->db->executeS(
+            'SHOW COLUMNS FROM `' . _DB_PREFIX_ . 'bemoliveshopping_configuration`'
+            . ' LIKE \'checkout_landing\''
+        );
+
+        if (is_array($columns) && $columns !== array()) {
+            return true;
+        }
+
+        return (bool) $this->db->execute(
+            'ALTER TABLE `' . _DB_PREFIX_ . 'bemoliveshopping_configuration`'
+            . " ADD `checkout_landing` VARCHAR(16) NOT NULL DEFAULT 'cart'"
+            . ' AFTER `embedded_checkout_requested`'
+        );
     }
 
     public function uninstall()

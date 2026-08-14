@@ -2,7 +2,7 @@
 <module>
   <name>bemoliveshopping</name>
   <displayName><![CDATA[BEMO Live Shopping]]></displayName>
-  <version><![CDATA[0.3.4]]></version>
+  <version><![CDATA[0.4.0]]></version>
   <description><![CDATA[Connect your PrestaShop catalog to BEMO live shopping sessions.]]></description>
   <author><![CDATA[BEMO]]></author>
   <tab><![CDATA[advertising_marketing]]></tab>

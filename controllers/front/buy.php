@@ -18,8 +18,8 @@ class BemoliveshoppingBuyModuleFrontController extends ModuleFrontController
         header('Referrer-Policy: no-referrer');
 
         $shopId = isset($this->context->shop->id) ? (int) $this->context->shop->id : 0;
-        $credentials = (new DbConfigurationRepository(Db::getInstance()))
-            ->getPairingCredentials($shopId);
+        $configuration = new DbConfigurationRepository(Db::getInstance());
+        $credentials = $configuration->getPairingCredentials($shopId);
         $token = Tools::getValue('token');
         if (!is_array($credentials) || !isset($credentials['buy_link_secret']) || !is_string($token)) {
             $this->redirectToNotFound();
@@ -42,14 +42,14 @@ class BemoliveshoppingBuyModuleFrontController extends ModuleFrontController
             $this->redirectToNotFound();
         }
 
-        $checkoutUrl = (new CheckoutEntryService(
+        $landingUrl = (new CheckoutEntryService(
             new PrestaShopCartCheckoutGateway($this->context, $product)
-        ))->enter($productId);
-        if ($checkoutUrl === null) {
+        ))->enter($productId, $configuration->getCheckoutLanding($shopId));
+        if ($landingUrl === null) {
             $this->redirectToNotFound();
         }
 
-        Tools::redirect($checkoutUrl);
+        Tools::redirect($landingUrl);
     }
 
     private function redirectToNotFound()

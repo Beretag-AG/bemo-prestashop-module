@@ -2,6 +2,7 @@
 
 namespace Bemo\LiveShopping\Tests\Configuration;
 
+use Bemo\LiveShopping\Checkout\CheckoutLanding;
 use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
 use PHPUnit\Framework\TestCase;
 
@@ -49,14 +50,32 @@ class DbConfigurationRepositoryTest extends TestCase
     public function testSavesAndLoadsTheActivationChoicesForTheShop()
     {
         $db = new ConfigurationDb();
-        $db->values = array(1, 1, 0);
+        $db->values = array(1, 1, 0, CheckoutLanding::CHECKOUT);
         $repository = new DbConfigurationRepository($db);
 
-        self::assertTrue($repository->saveActivationChoices(7, true, false));
+        self::assertTrue($repository->saveActivationChoices(
+            7,
+            true,
+            false,
+            CheckoutLanding::CHECKOUT
+        ));
         self::assertSame(1, $db->updatedValues['webservice_access_approved']);
         self::assertSame(0, $db->updatedValues['embedded_checkout_requested']);
+        self::assertSame(CheckoutLanding::CHECKOUT, $db->updatedValues['checkout_landing']);
         self::assertTrue($repository->isWebserviceAccessApproved(7));
         self::assertFalse($repository->isEmbeddedCheckoutRequested(7));
+        self::assertSame(CheckoutLanding::CHECKOUT, $repository->getCheckoutLanding(7));
+    }
+
+    public function testDefaultsUnknownCheckoutLandingToCart()
+    {
+        $db = new ConfigurationDb();
+        $db->values = array(false);
+
+        self::assertSame(
+            CheckoutLanding::CART,
+            (new DbConfigurationRepository($db))->getCheckoutLanding(7)
+        );
     }
 
     public function testReturnsCredentialsOnlyWhenEveryDirectionIsPresent()
