@@ -19,6 +19,7 @@ class InstallerTest extends TestCase
         self::assertStringContainsString('`pairing_expires_at`', $db->executed[0]);
         self::assertStringContainsString('`webservice_access_approved`', $db->executed[0]);
         self::assertStringContainsString('`embedded_checkout_requested`', $db->executed[0]);
+        self::assertStringContainsString("`checkout_landing` VARCHAR(16) NOT NULL DEFAULT 'cart'", $db->executed[0]);
         self::assertStringContainsString('bemoliveshopping_outbox', $db->executed[1]);
         self::assertStringContainsString('UNIQUE KEY `uniq_bemoliveshopping_event`', $db->executed[1]);
         self::assertStringContainsString('`status`, `available_at`', $db->executed[1]);
@@ -56,6 +57,21 @@ class InstallerTest extends TestCase
         self::assertTrue((new Installer($db))->upgradeToVersion034());
         self::assertStringContainsString('webservice_access_approved', $db->executed[0]);
         self::assertStringContainsString('embedded_checkout_requested', $db->executed[1]);
+    }
+
+    public function testUpgradeAddsCartLandingPreferenceOnce()
+    {
+        $db = new InstallerDb();
+        $installer = new Installer($db);
+
+        self::assertTrue($installer->upgradeToVersion040());
+        self::assertCount(1, $db->executed);
+        self::assertStringContainsString('checkout_landing', $db->executed[0]);
+        self::assertStringContainsString("DEFAULT 'cart'", $db->executed[0]);
+
+        $db->columns = array(array('Field' => 'checkout_landing'));
+        self::assertTrue($installer->upgradeToVersion040());
+        self::assertCount(1, $db->executed);
     }
 
     public function testInstallRollsBackConfigurationTableWhenOutboxCreationFails()

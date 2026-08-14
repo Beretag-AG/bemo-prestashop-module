@@ -29,5 +29,5 @@ interface CartCheckoutGatewayInterface
 
     public function persistCart($cart);
 
-    public function getCheckoutUrl();
+    public function getLandingUrl($landing);
 }

@@ -25,7 +25,8 @@ for required in \
   bemoliveshopping/upgrade/upgrade-0.2.0.php \
   bemoliveshopping/upgrade/upgrade-0.3.0.php \
   bemoliveshopping/upgrade/upgrade-0.3.1.php \
-  bemoliveshopping/upgrade/upgrade-0.3.4.php; do
+  bemoliveshopping/upgrade/upgrade-0.3.4.php \
+  bemoliveshopping/upgrade/upgrade-0.4.0.php; do
   if ! grep -Fx "$required" <<<"$entries" >/dev/null; then
     echo "Archive is missing $required." >&2
     exit 1

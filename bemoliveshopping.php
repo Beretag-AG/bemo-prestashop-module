@@ -12,6 +12,7 @@ if (!defined('_PS_VERSION_')) {
 require_once __DIR__ . '/config/autoload.php';
 
 use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
+use Bemo\LiveShopping\Checkout\CheckoutLanding;
 use Bemo\LiveShopping\Installation\Installer;
 use Bemo\LiveShopping\Lock\DbShopLock;
 use Bemo\LiveShopping\Pairing\CurlPairingGateway;
@@ -32,7 +33,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.3.4';
+    const VERSION = '0.4.0';
 
     /** @var string */
     private $output = '';
@@ -106,6 +107,11 @@ class Bemoliveshopping extends Module
     public function upgradeToVersion034()
     {
         return (new Installer(Db::getInstance()))->upgradeToVersion034();
+    }
+
+    public function upgradeToVersion040()
+    {
+        return (new Installer(Db::getInstance()))->upgradeToVersion040();
     }
 
     public function getContent()
@@ -349,7 +355,8 @@ class Bemoliveshopping extends Module
         $saved = $repository->saveActivationChoices(
             (int) $this->context->shop->id,
             $this->requestedChoice('BEMO_CONFIRM_WEBSERVICE'),
-            $this->requestedChoice('BEMO_CONFIRM_EMBEDDED_CHECKOUT')
+            $this->requestedChoice('BEMO_CONFIRM_EMBEDDED_CHECKOUT'),
+            CheckoutLanding::normalize(Tools::getValue('BEMO_CHECKOUT_LANDING'))
         );
         if (!$saved) {
             $this->output .= $this->displayError($this->l('The BEMO module settings could not be saved.'));
@@ -417,6 +424,7 @@ class Bemoliveshopping extends Module
                     : EndpointPolicy::PRODUCTION_APP_BASE_URL),
             'BEMO_CONFIRM_WEBSERVICE' => $repository->isWebserviceAccessApproved($shopId) ? 1 : 0,
             'BEMO_CONFIRM_EMBEDDED_CHECKOUT' => $repository->isEmbeddedCheckoutRequested($shopId) ? 1 : 0,
+            'BEMO_CHECKOUT_LANDING' => $repository->getCheckoutLanding($shopId),
         );
 
         return $helper->generateForm(array($this->configurationForm($environmentValues !== null)));
@@ -465,15 +473,35 @@ class Bemoliveshopping extends Module
                     ),
                     array(
                         'type' => 'switch',
-                        'label' => $this->l('Show checkout inside BEMO'),
+                        'label' => $this->l('Open the shop inside BEMO'),
                         'name' => 'BEMO_CONFIRM_EMBEDDED_CHECKOUT',
                         'is_bool' => true,
                         'desc' => $this->l(
-                            'Choose Yes to request the checkout modal. Your shop must use HTTPS, cross-site checkout cookies, and framing headers that allow BEMO. BEMO reviews this once per shop; until approval, checkout safely opens in a new tab.'
+                            'Choose Yes to request the embedded cart and checkout. Your shop must use HTTPS, cross-site checkout cookies, and framing headers that allow BEMO. BEMO reviews this once per shop; until approval, the shop safely opens in a new tab.'
                         ),
                         'values' => array(
                             array('id' => 'bemo_embed_on', 'value' => 1, 'label' => $this->l('Yes')),
                             array('id' => 'bemo_embed_off', 'value' => 0, 'label' => $this->l('No')),
+                        ),
+                    ),
+                    array(
+                        'type' => 'radio',
+                        'label' => $this->l('After adding a product'),
+                        'name' => 'BEMO_CHECKOUT_LANDING',
+                        'desc' => $this->l(
+                            'Open the cart so viewers can keep shopping, or continue directly to checkout. This choice applies immediately to new BEMO product clicks.'
+                        ),
+                        'values' => array(
+                            array(
+                                'id' => 'bemo_checkout_landing_cart',
+                                'value' => CheckoutLanding::CART,
+                                'label' => $this->l('Open the cart (recommended)'),
+                            ),
+                            array(
+                                'id' => 'bemo_checkout_landing_checkout',
+                                'value' => CheckoutLanding::CHECKOUT,
+                                'label' => $this->l('Continue directly to checkout'),
+                            ),
                         ),
                     ),
                 ),

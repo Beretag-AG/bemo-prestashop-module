@@ -6,6 +6,8 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
+use Bemo\LiveShopping\Checkout\CheckoutLanding;
+
 class DbConfigurationRepository implements ConfigurationRepositoryInterface
 {
     const DEFAULT_API_BASE_URL = 'https://actions.bemo.now';
@@ -37,11 +39,17 @@ class DbConfigurationRepository implements ConfigurationRepositoryInterface
         ));
     }
 
-    public function saveActivationChoices($shopId, $webserviceAccessApproved, $embeddedCheckoutRequested)
+    public function saveActivationChoices(
+        $shopId,
+        $webserviceAccessApproved,
+        $embeddedCheckoutRequested,
+        $checkoutLanding = CheckoutLanding::CART
+    )
     {
         return $this->upsert($shopId, array(
             'webservice_access_approved' => $webserviceAccessApproved ? 1 : 0,
             'embedded_checkout_requested' => $embeddedCheckoutRequested ? 1 : 0,
+            'checkout_landing' => CheckoutLanding::normalize($checkoutLanding),
         ));
     }
 
@@ -53,6 +61,16 @@ class DbConfigurationRepository implements ConfigurationRepositoryInterface
     public function isEmbeddedCheckoutRequested($shopId)
     {
         return $this->getBooleanSetting($shopId, 'embedded_checkout_requested');
+    }
+
+    public function getCheckoutLanding($shopId)
+    {
+        $value = $this->db->getValue(
+            'SELECT `checkout_landing` FROM `' . _DB_PREFIX_ . 'bemoliveshopping_configuration`'
+            . ' WHERE `id_shop` = ' . (int) $shopId
+        );
+
+        return CheckoutLanding::normalize($value);
     }
 
     public function getWebserviceAccountId($shopId)

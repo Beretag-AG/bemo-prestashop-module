@@ -57,9 +57,11 @@ The current signed purchase-link payload contains exactly `connectionId`,
 `sessionId`. It does not authorize a variant, voucher, quantity, cart,
 customer, or redirect target. The PrestaShop module adds the signed product at
 the shop's native minimum quantity, uses only that shop's configured default
-combination when one is required, and enters the native checkout route. It does
-not apply vouchers. A signed variant or voucher flow requires a separately
-versioned contract before it can be implemented.
+combination when one is required. It does not apply vouchers. The shop's module
+setting selects whether the controller lands on the native cart (the default)
+or continues directly to checkout; this preference is not part of the signed
+authorization. A signed variant or voucher flow requires a separately versioned
+contract before it can be implemented.
 
 ## Pairing request
 

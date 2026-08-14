@@ -17,9 +17,9 @@ class CheckoutEntryService
     }
 
     /**
-     * @return string|null A native checkout URL, or null when entry is unsafe.
+     * @return string|null A native cart or checkout URL, or null when entry is unsafe.
      */
-    public function enter($productId)
+    public function enter($productId, $landing = CheckoutLanding::CART)
     {
         $productId = (int) $productId;
         if ($productId <= 0) {
@@ -59,8 +59,8 @@ class CheckoutEntryService
             return null;
         }
 
-        $checkoutUrl = $this->gateway->getCheckoutUrl();
+        $landingUrl = $this->gateway->getLandingUrl(CheckoutLanding::normalize($landing));
 
-        return is_string($checkoutUrl) && $checkoutUrl !== '' ? $checkoutUrl : null;
+        return is_string($landingUrl) && $landingUrl !== '' ? $landingUrl : null;
     }
 }

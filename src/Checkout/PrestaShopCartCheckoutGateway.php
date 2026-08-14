@@ -156,8 +156,17 @@ class PrestaShopCartCheckoutGateway implements CartCheckoutGatewayInterface
         return true;
     }
 
-    public function getCheckoutUrl()
+    public function getLandingUrl($landing)
     {
+        if ($landing === CheckoutLanding::CART) {
+            return $this->context->link->getPageLink(
+                'cart',
+                true,
+                null,
+                array('action' => 'show')
+            );
+        }
+
         return $this->context->link->getPageLink('order', true);
     }
 }
