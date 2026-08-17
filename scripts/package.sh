@@ -2,20 +2,18 @@
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-version="$(sed -n "s/^[[:space:]]*const VERSION = '\([^']*\)';/\1/p" "$repository_root/bemoliveshopping.php")"
+version="$(git -C "$repository_root" show HEAD:bemoliveshopping.php \
+  | sed -n "s/^[[:space:]]*const VERSION = '\([^']*\)';/\1/p")"
 
 if [[ -z "$version" ]]; then
-  echo "Unable to read the module version." >&2
+  echo "Unable to read the module version from HEAD." >&2
   exit 1
 fi
 
 temporary_root="$(mktemp -d)"
 trap 'rm -rf "$temporary_root"' EXIT
 
-temporary_index="$temporary_root/index"
-GIT_INDEX_FILE="$temporary_index" git -C "$repository_root" read-tree HEAD
-GIT_INDEX_FILE="$temporary_index" git -C "$repository_root" add -A
-source_tree="$(GIT_INDEX_FILE="$temporary_index" git -C "$repository_root" write-tree)"
+source_tree="$(git -C "$repository_root" rev-parse HEAD^{tree})"
 source_date_epoch="$(git -C "$repository_root" show -s --format=%ct HEAD)"
 
 mkdir -p "$repository_root/dist"

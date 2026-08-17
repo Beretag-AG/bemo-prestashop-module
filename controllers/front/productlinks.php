@@ -18,7 +18,7 @@ class BemoliveshoppingProductlinksModuleFrontController extends ModuleFrontContr
         $shopId = isset($this->context->shop->id) ? (int) $this->context->shop->id : 0;
         $credentials = (new DbConfigurationRepository(Db::getInstance()))
             ->getPairingCredentials($shopId);
-        $providedKey = isset($_SERVER['PHP_AUTH_USER']) ? (string) $_SERVER['PHP_AUTH_USER'] : '';
+        $providedKey = $this->basicAuthenticationUser();
         if (!is_array($credentials)
             || !isset($credentials['webservice_key'])
             || !hash_equals((string) $credentials['webservice_key'], $providedKey)) {
@@ -36,7 +36,9 @@ class BemoliveshoppingProductlinksModuleFrontController extends ModuleFrontContr
         $products = array();
         foreach ($ids as $productId) {
             $product = new Product($productId, false, (int) $this->context->language->id, $shopId);
-            if (!Validate::isLoadedObject($product) || !$product->isAssociatedToShop($shopId)) {
+            if (!Validate::isLoadedObject($product)
+                || !(bool) $product->active
+                || !$product->isAssociatedToShop($shopId)) {
                 continue;
             }
             $products[] = array(
@@ -46,6 +48,34 @@ class BemoliveshoppingProductlinksModuleFrontController extends ModuleFrontContr
         }
 
         $this->respond(200, array('products' => $products));
+    }
+
+    /**
+     * PHP-FPM and CGI never populate PHP_AUTH_USER, so the raw Basic header the
+     * PrestaShop Webservice dispatcher also reads is decoded as a fallback.
+     */
+    private function basicAuthenticationUser()
+    {
+        if (isset($_SERVER['PHP_AUTH_USER'])) {
+            return (string) $_SERVER['PHP_AUTH_USER'];
+        }
+
+        foreach (array('HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION') as $header) {
+            if (!isset($_SERVER[$header]) || !is_string($_SERVER[$header])) {
+                continue;
+            }
+            if (stripos($_SERVER[$header], 'basic ') !== 0) {
+                continue;
+            }
+            $decoded = base64_decode(substr($_SERVER[$header], 6), true);
+            if (!is_string($decoded) || strpos($decoded, ':') === false) {
+                continue;
+            }
+
+            return substr($decoded, 0, strpos($decoded, ':'));
+        }
+
+        return '';
     }
 
     private function respond($status, array $payload)

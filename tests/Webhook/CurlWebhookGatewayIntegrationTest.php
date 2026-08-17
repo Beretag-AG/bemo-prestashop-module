@@ -46,6 +46,10 @@ class CurlWebhookGatewayIntegrationTest extends TestCase
                 hash_hmac('sha256', $payload, $secret),
                 $capture['headers']['X-BEMO-Signature']
             );
+            self::assertSame(
+                CurlWebhookGateway::SIGNATURE_VERSION,
+                $capture['headers']['X-Bemo-Signature-Version']
+            );
             self::assertSame('application/json', $capture['headers']['Content-Type']);
         } finally {
             proc_terminate($process);

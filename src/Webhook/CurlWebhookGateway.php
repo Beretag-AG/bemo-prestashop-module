@@ -11,6 +11,7 @@ use Bemo\LiveShopping\Pairing\EndpointNormalizer;
 class CurlWebhookGateway implements WebhookGatewayInterface
 {
     const MAX_RESPONSE_BYTES = 16384;
+    const SIGNATURE_VERSION = 'v1';
 
     /** @var EndpointNormalizer */
     private $endpoints;
@@ -46,6 +47,7 @@ class CurlWebhookGateway implements WebhookGatewayInterface
                 'Accept: application/json',
                 'Content-Type: application/json',
                 'X-BEMO-Signature: ' . hash_hmac('sha256', $rawPayload, $secret),
+                'X-Bemo-Signature-Version: ' . self::SIGNATURE_VERSION,
             ),
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => $rawPayload,

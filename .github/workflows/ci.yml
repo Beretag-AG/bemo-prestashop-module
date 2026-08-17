@@ -15,6 +15,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
+        # The token lets setup-php configure composer's GitHub auth, so dist
+        # downloads are not throttled by codeload's anonymous rate limit.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           php-version: ${{ matrix.php }}
           coverage: none

@@ -8,6 +8,8 @@ if (!defined('_PS_VERSION_')) {
 
 class Installer
 {
+    const OUTBOX_PENDING_INDEX = 'idx_bemoliveshopping_outbox_pending';
+
     /** @var \Db */
     private $db;
 
@@ -18,16 +20,18 @@ class Installer
 
     public function install()
     {
-        if (!$this->db->execute($this->configurationTableSql())) {
-            return false;
-        }
+        $tables = array(
+            $this->configurationTableSql(),
+            $this->outboxTableSql(),
+            $this->buyNonceTableSql(),
+        );
 
-        if (!$this->db->execute($this->outboxTableSql())) {
-            $this->db->execute(
-                'DROP TABLE IF EXISTS `' . _DB_PREFIX_ . 'bemoliveshopping_configuration`'
-            );
+        foreach ($tables as $sql) {
+            if (!$this->db->execute($sql)) {
+                $this->uninstall();
 
-            return false;
+                return false;
+            }
         }
 
         return true;
@@ -52,6 +56,7 @@ class Installer
             `webhook_secret` VARCHAR(128) DEFAULT NULL,
             `buy_link_secret` VARCHAR(128) DEFAULT NULL,
             `connection_status` VARCHAR(32) NOT NULL DEFAULT \'not_configured\',
+            `cron_token` VARCHAR(64) DEFAULT NULL,
             `date_add` DATETIME NOT NULL,
             `date_upd` DATETIME NOT NULL,
             PRIMARY KEY (`id_bemoliveshopping_configuration`),
@@ -65,6 +70,7 @@ class Installer
             `id_bemoliveshopping_outbox` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             `id_shop` INT UNSIGNED NOT NULL,
             `event_id` VARCHAR(64) NOT NULL,
+            `resource_key` VARCHAR(128) NOT NULL DEFAULT \'\',
             `payload` MEDIUMTEXT NOT NULL,
             `attempts` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
             `status` VARCHAR(16) NOT NULL DEFAULT \'pending\',
@@ -74,7 +80,22 @@ class Installer
             PRIMARY KEY (`id_bemoliveshopping_outbox`),
             UNIQUE KEY `uniq_bemoliveshopping_event` (`event_id`),
             KEY `idx_bemoliveshopping_due` (`status`, `available_at`),
-            KEY `idx_bemoliveshopping_outbox_shop` (`id_shop`)
+            KEY `idx_bemoliveshopping_outbox_shop` (`id_shop`),
+            KEY `' . self::OUTBOX_PENDING_INDEX . '` (`id_shop`, `status`, `resource_key`)
+        ) ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8;';
+    }
+
+    private function buyNonceTableSql()
+    {
+        return 'CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'bemoliveshopping_buy_nonce` (
+            `id_bemoliveshopping_buy_nonce` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `id_shop` INT UNSIGNED NOT NULL,
+            `nonce` VARCHAR(128) NOT NULL,
+            `expires_at` DATETIME NOT NULL,
+            `date_add` DATETIME NOT NULL,
+            PRIMARY KEY (`id_bemoliveshopping_buy_nonce`),
+            UNIQUE KEY `uniq_bemoliveshopping_buy_nonce` (`id_shop`, `nonce`),
+            KEY `idx_bemoliveshopping_buy_nonce_expiry` (`expires_at`)
         ) ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8;';
     }
 
@@ -192,8 +213,29 @@ class Installer
         );
     }
 
+    public function upgradeToVersion050()
+    {
+        if (!$this->addColumnOnce('bemoliveshopping_configuration', 'cron_token', 'VARCHAR(64) DEFAULT NULL AFTER `connection_status`')
+            || !$this->addColumnOnce('bemoliveshopping_outbox', 'resource_key', "VARCHAR(128) NOT NULL DEFAULT '' AFTER `event_id`")) {
+            return false;
+        }
+
+        if (!$this->hasIndex('bemoliveshopping_outbox', self::OUTBOX_PENDING_INDEX)
+            && !$this->db->execute(
+                'ALTER TABLE `' . _DB_PREFIX_ . 'bemoliveshopping_outbox`'
+                . ' ADD KEY `' . self::OUTBOX_PENDING_INDEX . '` (`id_shop`, `status`, `resource_key`)'
+            )) {
+            return false;
+        }
+
+        return (bool) $this->db->execute($this->buyNonceTableSql());
+    }
+
     public function uninstall()
     {
+        $nonceRemoved = (bool) $this->db->execute(
+            'DROP TABLE IF EXISTS `' . _DB_PREFIX_ . 'bemoliveshopping_buy_nonce`'
+        );
         $outboxRemoved = (bool) $this->db->execute(
             'DROP TABLE IF EXISTS `' . _DB_PREFIX_ . 'bemoliveshopping_outbox`'
         );
@@ -201,6 +243,38 @@ class Installer
             'DROP TABLE IF EXISTS `' . _DB_PREFIX_ . 'bemoliveshopping_configuration`'
         );
 
-        return $outboxRemoved && $configurationRemoved;
+        return $nonceRemoved && $outboxRemoved && $configurationRemoved;
+    }
+
+    private function addColumnOnce($table, $column, $definition)
+    {
+        $columns = $this->db->executeS(
+            'SHOW COLUMNS FROM `' . _DB_PREFIX_ . $table . '` LIKE \'' . pSQL($column) . '\''
+        );
+        if (is_array($columns) && $columns !== array()) {
+            return true;
+        }
+
+        return (bool) $this->db->execute(
+            'ALTER TABLE `' . _DB_PREFIX_ . $table . '` ADD `' . $column . '` ' . $definition
+        );
+    }
+
+    private function hasIndex($table, $indexName)
+    {
+        $indexes = $this->db->executeS(
+            'SHOW INDEX FROM `' . _DB_PREFIX_ . $table . '`'
+        );
+        if (!is_array($indexes)) {
+            return false;
+        }
+
+        foreach ($indexes as $index) {
+            if (isset($index['Key_name']) && $index['Key_name'] === $indexName) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

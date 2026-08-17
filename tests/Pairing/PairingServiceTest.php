@@ -2,6 +2,7 @@
 
 namespace Bemo\LiveShopping\Tests\Pairing;
 
+use Bemo\LiveShopping\Checkout\CheckoutLanding;
 use Bemo\LiveShopping\Configuration\ConfigurationRepositoryInterface;
 use Bemo\LiveShopping\Lock\ShopLockInterface;
 use Bemo\LiveShopping\Pairing\EndpointNormalizer;
@@ -154,6 +155,13 @@ class PairingConfiguration implements ConfigurationRepositoryInterface
     public function getApiBaseUrl($shopId) { return $this->apiBaseUrl; }
     public function getAppBaseUrl($shopId) { return $this->appBaseUrl; }
     public function saveEndpoints($shopId, $apiBaseUrl, $appBaseUrl) { return true; }
+    public function saveActivationChoices($shopId, $approved, $embedded, $landing = CheckoutLanding::CART) { return true; }
+    public function isWebserviceAccessApproved($shopId) { return true; }
+    public function isEmbeddedCheckoutRequested($shopId) { return false; }
+    public function getCheckoutLanding($shopId) { return CheckoutLanding::CART; }
+    public function getConnectionStatus($shopId) { return 'ready_to_pair'; }
+    public function getCronToken($shopId) { return null; }
+    public function saveCronToken($shopId, $cronToken) { return true; }
     public function getWebserviceAccountId($shopId) { return 73; }
     public function getWebserviceAccountIds() { return array(73); }
     public function getPairingCredentials($shopId) { return $this->credentials; }

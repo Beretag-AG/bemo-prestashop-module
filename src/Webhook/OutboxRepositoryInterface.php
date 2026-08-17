@@ -8,9 +8,11 @@ if (!defined('_PS_VERSION_')) {
 
 interface OutboxRepositoryInterface
 {
-    public function enqueue($shopId, $eventId, $rawPayload, $availableAt);
+    public function enqueue($shopId, $eventId, $resourceKey, $rawPayload, $availableAt);
 
-    public function getDue($limit, $now);
+    public function getDueShopIds($limit, $now);
+
+    public function getDueForShop($shopId, $limit, $now);
 
     public function delete($outboxId);
 

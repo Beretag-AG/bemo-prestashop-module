@@ -14,5 +14,7 @@ interface WebserviceGatewayInterface
 
     public function isAccountValid($accountId, $shopId, $key, array $permissions);
 
+    public function updatePermissions($accountId, array $permissions);
+
     public function deleteAccount($accountId);
 }

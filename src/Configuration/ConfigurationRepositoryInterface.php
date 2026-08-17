@@ -6,6 +6,8 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
+use Bemo\LiveShopping\Checkout\CheckoutLanding;
+
 interface ConfigurationRepositoryInterface
 {
     public function getApiBaseUrl($shopId);
@@ -13,6 +15,25 @@ interface ConfigurationRepositoryInterface
     public function getAppBaseUrl($shopId);
 
     public function saveEndpoints($shopId, $apiBaseUrl, $appBaseUrl);
+
+    public function saveActivationChoices(
+        $shopId,
+        $webserviceAccessApproved,
+        $embeddedCheckoutRequested,
+        $checkoutLanding = CheckoutLanding::CART
+    );
+
+    public function isWebserviceAccessApproved($shopId);
+
+    public function isEmbeddedCheckoutRequested($shopId);
+
+    public function getCheckoutLanding($shopId);
+
+    public function getConnectionStatus($shopId);
+
+    public function getCronToken($shopId);
+
+    public function saveCronToken($shopId, $cronToken);
 
     public function getWebserviceAccountId($shopId);
 
