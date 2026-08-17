@@ -105,16 +105,53 @@ event, an exact-byte webhook HMAC vector, and a golden signed buy-link token.
 The BEMO and module repositories each consume matching copies so either side
 fails verification when the wire contract drifts.
 
+## Webhook request headers
+
+Every outbound catalog event carries the HMAC of the exact request body plus the
+signature scheme it was produced with:
+
+```http
+X-BEMO-Signature: <hex-HMAC-SHA256>
+X-Bemo-Signature-Version: v1
+```
+
+The version header is additive. A receiver that only knows `v1` may ignore it,
+but a future scheme change is expressed there rather than by silently altering
+the signature format.
+
+## Signed purchase links are single use
+
+The module records the `nonce` of every accepted purchase link per shop and
+refuses the second use of the same token. A replay is answered exactly like an
+invalid or expired token: a redirect to the shop's `pagenotfound` page with no
+distinguishing detail. Records expire with the token TTL and are purged by the
+same drain that delivers queued events.
+
+The module does not verify `connectionId` against a locally stored connection:
+several BEMO creators may pair the same shop, so the module holds shop-scoped
+secrets and no single connection identifier.
+
 ## Webservice permission contract
 
-Only `GET` is provisioned for:
+Only `GET` and `HEAD` are provisioned for:
 
 - `products`
+- `categories`
 - `combinations`
 - `stock_availables`
 - `specific_prices`
 - `cart_rules`
+- `images`
+- `languages`
+- `currencies`
+- `shops`
+- `taxes`
+- `tax_rules`
 
 `orders` is deliberately excluded. Current sales-light policy counts checkout
 intent instead of pretending pushed order events form a reconciled revenue
 ledger.
+
+Module version 0.5.0 repairs the permissions of an already-provisioned key
+during upgrade without rotating it, so an existing BEMO connection keeps
+working.

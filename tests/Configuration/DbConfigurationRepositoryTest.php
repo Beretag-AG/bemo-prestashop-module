@@ -78,6 +78,30 @@ class DbConfigurationRepositoryTest extends TestCase
         );
     }
 
+    public function testReportsTheStoredConnectionStatusAndFallsBackToNotConfigured()
+    {
+        $db = new ConfigurationDb();
+        $db->values = array('pairing_pending', false);
+        $repository = new DbConfigurationRepository($db);
+
+        self::assertSame('pairing_pending', $repository->getConnectionStatus(7));
+        self::assertSame(
+            DbConfigurationRepository::STATUS_NOT_CONFIGURED,
+            $repository->getConnectionStatus(7)
+        );
+    }
+
+    public function testKeepsTheDrainTokenUntilOneIsSaved()
+    {
+        $db = new ConfigurationDb();
+        $db->values = array(false, 1);
+        $repository = new DbConfigurationRepository($db);
+
+        self::assertNull($repository->getCronToken(7));
+        self::assertTrue($repository->saveCronToken(7, 'drain-token'));
+        self::assertSame('drain-token', $db->updatedValues['cron_token']);
+    }
+
     public function testReturnsCredentialsOnlyWhenEveryDirectionIsPresent()
     {
         $db = new ConfigurationDb();

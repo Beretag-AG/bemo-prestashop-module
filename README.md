@@ -19,7 +19,7 @@ merchant's own storefront.
 | --- | --- |
 | PrestaShop | 1.7.6 through 8.x |
 | PHP | 7.2.5 through 8.1 |
-| Module dependency | PrestaShop Cron tasks manager (`cronjobs`) |
+| Scheduler | PrestaShop Cron tasks manager (`cronjobs`) **or** any scheduler that can call a URL |
 
 PrestaShop 1.7.6 installations running PHP 5.6–7.1 must upgrade PHP before
 installing this module. PrestaShop 9 is not supported by the current release.
@@ -39,8 +39,12 @@ installing this module. PrestaShop 9 is not supported by the current release.
   the configured BEMO application without rendering or logging credentials.
 - Queues catalog-change events durably and delivers exact-byte HMAC-signed
   webhooks outside merchant requests, with idempotent ingestion and retry.
-- Validates short-lived signed purchase links and resolves their product only
-  inside the currently selected shop.
+- Drains the queue from the Cron tasks manager module or from a
+  token-authenticated URL, so a stock PrestaShop install needs no extra module.
+- Validates short-lived signed purchase links, accepts each one only once, and
+  resolves their product only inside the currently selected shop.
+- Revokes the read-only Webservice key and clears stored credentials when the
+  merchant turns catalog access off or disconnects the shop.
 - Removes only module-owned Webservice accounts during uninstall, including in
   multistore installations.
 - Produces a deterministic ZIP that can be uploaded through Module Manager.
@@ -71,8 +75,20 @@ To install it in a development or staging shop:
    without connecting, or click **Save and connect to BEMO** to provision
    read-only access and choose the BEMO account for this shop.
 
-Keep the Cron tasks manager active so queued catalog events are drained. Use
-its Advanced mode when the hosting platform already provides a scheduler.
+Queued catalog events need a scheduler. Either keep the **Cron tasks manager**
+module active, or call the drain URL shown on the configuration page from the
+hosting platform's scheduler, for example every five minutes:
+
+```cron
+*/5 * * * * curl -sS -o /dev/null 'https://shop.example/module/bemoliveshopping/cron?token=...'
+```
+
+The drain URL carries a per-shop token and does nothing else. Treat it like a
+credential: anyone holding it can trigger delivery of already-queued events.
+
+To stop the integration, open **BEMO Live Shopping → Configure** and select
+**Disconnect from BEMO**. That deletes the module-created Webservice key and
+clears the stored credentials for the current shop.
 
 ## Embedded checkout
 
@@ -118,8 +134,8 @@ process or store those details in this flow.
 Ask the merchant or hosting provider to complete these steps on a staging copy
 before BEMO enables embedded checkout on the live shop:
 
-1. Install or upgrade **BEMO Live Shopping 0.4.0 or newer** and keep **Cron
-   tasks manager** active.
+1. Install or upgrade **BEMO Live Shopping 0.5.0 or newer** and schedule the
+   event drain, either with **Cron tasks manager** or with the drain URL.
 2. Enable HTTPS for the entire storefront, including cart, checkout, payment,
    return, and confirmation pages.
 3. Set **Cookie SameSite** to **None** under **Advanced Parameters →
@@ -199,11 +215,16 @@ to replace existing local files.
 
 ## Security
 
-- PrestaShop Webservice access is limited to `GET` on required
+- PrestaShop Webservice access is limited to `GET` and `HEAD` on required
   catalog resources.
 - Customer and order data are not exposed through the Webservice account.
 - Pairing, webhook, and purchase-link secrets are generated independently.
-- Secrets are never rendered back into Back Office pages or written to logs.
+- Pairing, webhook, and purchase-link secrets are never rendered back into Back
+  Office pages or written to logs. The event drain token is the one exception:
+  it is shown on the configuration page because a merchant has to paste it into
+  a scheduler, and it authorizes only queue delivery.
+- Signed purchase links are accepted once per shop; a replayed link fails like
+  any other invalid link.
 - Production credentials can be sent only to `https://actions.bemo.now` and
   redirect only to `https://bemo.now`. Developer-mode overrides still require
   HTTPS, except for explicit localhost URLs.

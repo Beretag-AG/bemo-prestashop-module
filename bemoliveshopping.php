@@ -13,6 +13,7 @@ require_once __DIR__ . '/config/autoload.php';
 
 use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
 use Bemo\LiveShopping\Checkout\CheckoutLanding;
+use Bemo\LiveShopping\Checkout\DbBuyLinkNonceRepository;
 use Bemo\LiveShopping\Installation\Installer;
 use Bemo\LiveShopping\Lock\DbShopLock;
 use Bemo\LiveShopping\Pairing\CurlPairingGateway;
@@ -33,7 +34,8 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.4.0';
+    const VERSION = '0.5.0';
+    const CRON_CONTROLLER = 'cron';
 
     /** @var string */
     private $output = '';
@@ -46,7 +48,6 @@ class Bemoliveshopping extends Module
         $this->author = 'BEMO';
         $this->need_instance = 0;
         $this->bootstrap = true;
-        $this->dependencies = array('cronjobs');
         $this->ps_versions_compliancy = array(
             'min' => '1.7.6.0',
             'max' => '8.99.99',
@@ -106,12 +107,21 @@ class Bemoliveshopping extends Module
 
     public function upgradeToVersion034()
     {
-        return (new Installer(Db::getInstance()))->upgradeToVersion034();
+        return (new Installer(Db::getInstance()))->upgradeToVersion034()
+            && $this->registerBemoHooks();
     }
 
     public function upgradeToVersion040()
     {
-        return (new Installer(Db::getInstance()))->upgradeToVersion040();
+        return (new Installer(Db::getInstance()))->upgradeToVersion040()
+            && $this->registerBemoHooks();
+    }
+
+    public function upgradeToVersion050()
+    {
+        return (new Installer(Db::getInstance()))->upgradeToVersion050()
+            && $this->registerBemoHooks()
+            && $this->repairWebservicePermissions();
     }
 
     public function getContent()
@@ -124,11 +134,13 @@ class Bemoliveshopping extends Module
 
         if (Tools::isSubmit('submitBemoActivateAccount')) {
             $this->activateBemoAccount();
+        } elseif (Tools::isSubmit('submitBemoDisconnect')) {
+            $this->disconnectFromBemo();
         } elseif (Tools::isSubmit('submitBemoConfiguration')) {
             $this->saveConfiguration();
         }
 
-        return $this->output . $this->renderConfigurationForm();
+        return $this->output . $this->renderConnectionPanel() . $this->renderConfigurationForm();
     }
 
     public function hookActionObjectProductAddAfter($params)
@@ -185,8 +197,22 @@ class Bemoliveshopping extends Module
 
     public function hookActionCronJob()
     {
+        return $this->drainWebhookOutbox();
+    }
+
+    /**
+     * Shared by the Cron tasks manager hook and the token-authenticated cron
+     * controller, so a shop without that module still drains its queue.
+     */
+    public function drainWebhookOutbox($shopId = null)
+    {
         try {
-            return $this->webhookOutbox()->drain();
+            $drained = $shopId === null
+                ? $this->webhookOutbox()->drain()
+                : $this->webhookOutbox()->drainShop((int) $shopId);
+            (new DbBuyLinkNonceRepository(Db::getInstance()))->purgeExpiredBefore(time());
+
+            return $drained;
         } catch (Exception $exception) {
             PrestaShopLogger::addLog('BEMO webhook outbox processing failed', 3);
 
@@ -222,9 +248,34 @@ class Bemoliveshopping extends Module
         $this->output .= $this->displayConfirmation($this->l('BEMO module settings saved.'));
     }
 
+    private function disconnectFromBemo()
+    {
+        $shopId = (int) $this->context->shop->id;
+        $repository = new DbConfigurationRepository(Db::getInstance());
+
+        if (!$this->revokeCatalogAccess($shopId)
+            || !$this->persistActivationChoices(
+                $shopId,
+                false,
+                $repository->isEmbeddedCheckoutRequested($shopId),
+                $repository->getCheckoutLanding($shopId)
+            )) {
+            return;
+        }
+
+        $this->output .= $this->displayConfirmation(
+            $this->l('This shop is disconnected from BEMO. The read-only catalog key was deleted and the stored credentials were cleared.')
+        );
+    }
+
     private function activateBemoAccount()
     {
-        if (!$this->requestedChoice('BEMO_CONFIRM_WEBSERVICE')) {
+        if (!$this->requestedChoice(
+            'BEMO_CONFIRM_WEBSERVICE',
+            (new DbConfigurationRepository(Db::getInstance()))->isWebserviceAccessApproved(
+                (int) $this->context->shop->id
+            )
+        )) {
             $this->output .= $this->displayError(
                 $this->l('Confirm that you understand the PrestaShop Webservice will be enabled for this shop.')
             );
@@ -352,12 +403,40 @@ class Bemoliveshopping extends Module
     private function saveActivationChoices()
     {
         $repository = new DbConfigurationRepository(Db::getInstance());
-        $saved = $repository->saveActivationChoices(
-            (int) $this->context->shop->id,
-            $this->requestedChoice('BEMO_CONFIRM_WEBSERVICE'),
-            $this->requestedChoice('BEMO_CONFIRM_EMBEDDED_CHECKOUT'),
-            CheckoutLanding::normalize(Tools::getValue('BEMO_CHECKOUT_LANDING'))
+        $shopId = (int) $this->context->shop->id;
+        $approved = $repository->isWebserviceAccessApproved($shopId);
+        $requestedApproval = $this->requestedChoice('BEMO_CONFIRM_WEBSERVICE', $approved);
+
+        if ($approved && !$requestedApproval && !$this->revokeCatalogAccess($shopId)) {
+            return false;
+        }
+
+        return $this->persistActivationChoices(
+            $shopId,
+            $requestedApproval,
+            $this->requestedChoice(
+                'BEMO_CONFIRM_EMBEDDED_CHECKOUT',
+                $repository->isEmbeddedCheckoutRequested($shopId)
+            ),
+            $this->requestedLanding($repository->getCheckoutLanding($shopId))
         );
+    }
+
+    private function persistActivationChoices($shopId, $approved, $embedded, $checkoutLanding)
+    {
+        $repository = new DbConfigurationRepository(Db::getInstance());
+        try {
+            $saved = (new DbShopLock(Db::getInstance()))->synchronized(
+                'configuration',
+                $shopId,
+                function () use ($repository, $shopId, $approved, $embedded, $checkoutLanding) {
+                    return $repository->saveActivationChoices($shopId, $approved, $embedded, $checkoutLanding);
+                }
+            );
+        } catch (Exception $exception) {
+            PrestaShopLogger::addLog('BEMO module settings are busy', 2);
+            $saved = false;
+        }
         if (!$saved) {
             $this->output .= $this->displayError($this->l('The BEMO module settings could not be saved.'));
 
@@ -367,9 +446,82 @@ class Bemoliveshopping extends Module
         return true;
     }
 
-    private function requestedChoice($name)
+    private function revokeCatalogAccess($shopId)
     {
-        return (string) Tools::getValue($name) === '1';
+        $repository = new DbConfigurationRepository(Db::getInstance());
+        $gateway = new PrestaShopWebserviceGateway();
+        try {
+            $revoked = (new DbShopLock(Db::getInstance()))->synchronized(
+                'configuration',
+                $shopId,
+                function () use ($repository, $gateway, $shopId) {
+                    $accountId = $repository->getWebserviceAccountId($shopId);
+                    if ($accountId !== null && !$gateway->deleteAccount($accountId)) {
+                        return false;
+                    }
+
+                    return $repository->clearProvisionedCredentials($shopId);
+                }
+            );
+        } catch (Exception $exception) {
+            PrestaShopLogger::addLog('BEMO catalog access could not be revoked', 3);
+            $revoked = false;
+        }
+        if (!$revoked) {
+            $this->output .= $this->displayError(
+                $this->l('The BEMO catalog access could not be revoked. Retry in a moment.')
+            );
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Widens an already-provisioned key in place. Rotating it instead would
+     * break the BEMO connection that still holds the previous key, and a key
+     * that cannot be repaired is fixed by pairing the shop again.
+     */
+    private function repairWebservicePermissions()
+    {
+        $gateway = new PrestaShopWebserviceGateway();
+        $permissions = (new ReadOnlyPermissionMap())->build();
+
+        foreach ((new DbConfigurationRepository(Db::getInstance()))->getWebserviceAccountIds() as $accountId) {
+            try {
+                $repaired = $gateway->updatePermissions($accountId, $permissions);
+            } catch (Exception $exception) {
+                $repaired = false;
+            }
+            if (!$repaired) {
+                PrestaShopLogger::addLog(
+                    'BEMO could not widen the read-only Webservice permissions of account ' . (int) $accountId
+                    . '. Connect the shop to BEMO again.',
+                    2
+                );
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * A field missing from the submit keeps its stored value: an absent switch
+     * is a partial form post, not a request to turn the setting off.
+     */
+    private function requestedChoice($name, $persisted)
+    {
+        $value = Tools::getValue($name, null);
+
+        return $value === null ? (bool) $persisted : (string) $value === '1';
+    }
+
+    private function requestedLanding($persisted)
+    {
+        $value = Tools::getValue('BEMO_CHECKOUT_LANDING', null);
+
+        return CheckoutLanding::normalize($value === null ? $persisted : $value);
     }
 
     private function pairingErrorMessage($reason)
@@ -395,6 +547,86 @@ class Bemoliveshopping extends Module
         }
 
         return $this->l('BEMO rejected the activation request. Retry to create a fresh pairing link.');
+    }
+
+    private function renderConnectionPanel()
+    {
+        $repository = new DbConfigurationRepository(Db::getInstance());
+        $shopId = (int) $this->context->shop->id;
+        $cronUrl = $this->cronUrl($shopId);
+        $rows = array(
+            $this->l('Connection status') => $this->connectionStatusLabel(
+                $repository->getConnectionStatus($shopId),
+                is_array($repository->getPairingCredentials($shopId))
+            ),
+            $this->l('Shop endpoint') => $this->context->shop->getBaseURL(true),
+            $this->l('BEMO app') => $repository->getAppBaseUrl($shopId),
+            $this->l('Catalog event drain URL') => $cronUrl === null
+                ? $this->l('Unavailable until the module settings can be saved.')
+                : $cronUrl,
+        );
+
+        $html = '<div class="panel"><h3><i class="icon-link"></i> ' . $this->l('BEMO connection') . '</h3><ul>';
+        foreach ($rows as $label => $value) {
+            $html .= '<li><strong>' . $label . ':</strong> ' . Tools::safeOutput($value) . '</li>';
+        }
+        $html .= '</ul><p>' . $this->l(
+            'Call the drain URL from a scheduler every few minutes so queued catalog events reach BEMO. Treat it as a secret: its token is the only thing that authorizes the drain.'
+        ) . '</p>';
+
+        if (!$this->isCronModuleActive()) {
+            $html .= '<p class="alert alert-warning">' . $this->l(
+                'The PrestaShop Cron tasks manager module is not installed or not active. Schedule the drain URL above with your own scheduler, otherwise catalog changes stay queued.'
+            ) . '</p>';
+        }
+
+        return $html . '</div>';
+    }
+
+    private function connectionStatusLabel($status, $hasCredentials)
+    {
+        if (!$hasCredentials) {
+            return $this->l('Not connected');
+        }
+
+        if ($status === 'pairing_starting' || $status === 'pairing_pending') {
+            return $this->l('Waiting for a BEMO account to claim this shop');
+        }
+
+        return $this->l('Connected with read-only catalog access');
+    }
+
+    private function isCronModuleActive()
+    {
+        return Module::isInstalled('cronjobs') && Module::isEnabled('cronjobs');
+    }
+
+    private function cronUrl($shopId)
+    {
+        $token = $this->cronToken($shopId);
+        if ($token === null) {
+            return null;
+        }
+
+        return $this->context->link->getModuleLink(
+            $this->name,
+            self::CRON_CONTROLLER,
+            array('token' => $token),
+            true
+        );
+    }
+
+    private function cronToken($shopId)
+    {
+        $repository = new DbConfigurationRepository(Db::getInstance());
+        $token = $repository->getCronToken($shopId);
+        if (is_string($token) && $token !== '') {
+            return $token;
+        }
+
+        $token = (new SecretGenerator())->directionalSecret();
+
+        return $repository->saveCronToken($shopId, $token) ? $token : null;
     }
 
     private function renderConfigurationForm()
@@ -512,6 +744,16 @@ class Bemoliveshopping extends Module
                         'type' => 'submit',
                         'class' => 'btn btn-default pull-left',
                         'icon' => 'process-icon-key',
+                    ),
+                    array(
+                        'title' => $this->l('Disconnect from BEMO'),
+                        'name' => 'submitBemoDisconnect',
+                        'type' => 'submit',
+                        'class' => 'btn btn-default pull-left',
+                        'icon' => 'process-icon-delete',
+                        'js' => 'onclick="return confirm(\'' . $this->l(
+                            'Disconnect this shop from BEMO? The read-only catalog key is deleted and BEMO stops receiving catalog events until you connect again.'
+                        ) . '\');"',
                     ),
                 ),
                 'submit' => array(

@@ -2,6 +2,7 @@
 
 namespace Bemo\LiveShopping\Tests\Setup;
 
+use Bemo\LiveShopping\Checkout\CheckoutLanding;
 use Bemo\LiveShopping\Configuration\ConfigurationRepositoryInterface;
 use Bemo\LiveShopping\Lock\ShopLockInterface;
 use Bemo\LiveShopping\Security\SecretGenerator;
@@ -99,6 +100,13 @@ class InMemoryConfigurationRepository implements ConfigurationRepositoryInterfac
     public function getApiBaseUrl($shopId) { return 'https://actions.bemo.now'; }
     public function getAppBaseUrl($shopId) { return 'https://bemo.now'; }
     public function saveEndpoints($shopId, $apiBaseUrl, $appBaseUrl) { return true; }
+    public function saveActivationChoices($shopId, $approved, $embedded, $landing = CheckoutLanding::CART) { return true; }
+    public function isWebserviceAccessApproved($shopId) { return true; }
+    public function isEmbeddedCheckoutRequested($shopId) { return false; }
+    public function getCheckoutLanding($shopId) { return CheckoutLanding::CART; }
+    public function getConnectionStatus($shopId) { return 'ready_to_pair'; }
+    public function getCronToken($shopId) { return null; }
+    public function saveCronToken($shopId, $cronToken) { return true; }
     public function getWebserviceAccountId($shopId) { return $this->accountId; }
     public function getWebserviceAccountIds() { return $this->accountId === null ? array() : array($this->accountId); }
     public function getPairingCredentials($shopId) { return $this->credentials; }
@@ -132,6 +140,7 @@ class FakeWebserviceGateway implements WebserviceGatewayInterface
     public $createCalls = 0;
     public $permissions = array();
     public $deletedAccountIds = array();
+    public $repairedAccountIds = array();
 
     public function enableWebservice() { $this->enabled = true; return true; }
     public function createReadOnlyAccount($shopId, $key, array $permissions)
@@ -144,6 +153,12 @@ class FakeWebserviceGateway implements WebserviceGatewayInterface
     {
         ++$this->validationCalls;
         return $this->valid;
+    }
+    public function updatePermissions($accountId, array $permissions)
+    {
+        $this->repairedAccountIds[] = $accountId;
+        $this->permissions = $permissions;
+        return true;
     }
     public function deleteAccount($accountId) { $this->deletedAccountIds[] = $accountId; return true; }
 }

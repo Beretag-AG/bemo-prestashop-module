@@ -65,6 +65,18 @@ class PrestaShopWebserviceGateway implements WebserviceGatewayInterface
         return true;
     }
 
+    public function updatePermissions($accountId, array $permissions)
+    {
+        $this->assertResourcesExist(array_keys($permissions));
+
+        $account = new \WebserviceKey((int) $accountId);
+        if (!\Validate::isLoadedObject($account)) {
+            return false;
+        }
+
+        return (bool) \WebserviceKey::setPermissionForAccount((int) $account->id, $permissions);
+    }
+
     public function deleteAccount($accountId)
     {
         $account = new \WebserviceKey((int) $accountId);

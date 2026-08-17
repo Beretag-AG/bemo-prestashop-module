@@ -12,6 +12,7 @@ class DbConfigurationRepository implements ConfigurationRepositoryInterface
 {
     const DEFAULT_API_BASE_URL = 'https://actions.bemo.now';
     const DEFAULT_APP_BASE_URL = 'https://bemo.now';
+    const STATUS_NOT_CONFIGURED = 'not_configured';
 
     /** @var \Db */
     private $db;
@@ -71,6 +72,33 @@ class DbConfigurationRepository implements ConfigurationRepositoryInterface
         );
 
         return CheckoutLanding::normalize($value);
+    }
+
+    public function getConnectionStatus($shopId)
+    {
+        $value = $this->db->getValue(
+            'SELECT `connection_status` FROM `' . _DB_PREFIX_ . 'bemoliveshopping_configuration`'
+            . ' WHERE `id_shop` = ' . (int) $shopId
+        );
+
+        return is_string($value) && $value !== '' ? $value : self::STATUS_NOT_CONFIGURED;
+    }
+
+    public function getCronToken($shopId)
+    {
+        $value = $this->db->getValue(
+            'SELECT `cron_token` FROM `' . _DB_PREFIX_ . 'bemoliveshopping_configuration`'
+            . ' WHERE `id_shop` = ' . (int) $shopId
+        );
+
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    public function saveCronToken($shopId, $cronToken)
+    {
+        return $this->upsert($shopId, array(
+            'cron_token' => pSQL($cronToken),
+        ));
     }
 
     public function getWebserviceAccountId($shopId)
@@ -201,7 +229,7 @@ class DbConfigurationRepository implements ConfigurationRepositoryInterface
                 'pairing_expires_at' => null,
                 'webhook_secret' => null,
                 'buy_link_secret' => null,
-                'connection_status' => 'not_configured',
+                'connection_status' => self::STATUS_NOT_CONFIGURED,
                 'date_upd' => date('Y-m-d H:i:s'),
             ),
             '`id_shop` = ' . (int) $shopId,

@@ -2,7 +2,9 @@
 
 namespace Bemo\LiveShopping\Tests\Webhook;
 
+use Bemo\LiveShopping\Checkout\CheckoutLanding;
 use Bemo\LiveShopping\Configuration\ConfigurationRepositoryInterface;
+use Bemo\LiveShopping\Lock\LockUnavailableException;
 use Bemo\LiveShopping\Lock\ShopLockInterface;
 use Bemo\LiveShopping\Pairing\ShopDetailsProviderInterface;
 use Bemo\LiveShopping\Security\SecretGenerator;
@@ -95,7 +97,65 @@ class WebhookOutboxTest extends TestCase
         self::assertSame('dead_letter', $outbox->rows[0]['status']);
     }
 
-    private function service($configuration, $outbox, $gateway, $now)
+    public function testEnqueueNeverWaitsOnTheDrainLock()
+    {
+        $outbox = new WebhookOutboxRepositoryFake();
+        $lock = new WebhookLockFake();
+
+        self::assertTrue($this->service(
+            new WebhookConfigurationFake(),
+            $outbox,
+            new WebhookGatewayFake(),
+            1700000000,
+            $lock
+        )->enqueue(7, 'product.updated', 'product', 42));
+
+        self::assertSame(array(), $lock->scopes);
+        self::assertSame('product:42:product.updated', $outbox->rows[0]['resource_key']);
+    }
+
+    public function testEachShopIsDrainedUnderItsOwnLock()
+    {
+        $outbox = new WebhookOutboxRepositoryFake();
+        $gateway = new WebhookGatewayFake();
+        $lock = new WebhookLockFake();
+        $service = $this->service(new WebhookConfigurationFake(), $outbox, $gateway, 1700000000, $lock);
+        $service->enqueue(7, 'product.updated', 'product', 42);
+        $service->enqueue(9, 'product.updated', 'product', 42);
+
+        self::assertSame(2, $service->drain());
+        self::assertSame(array(array('webhook-outbox', 7), array('webhook-outbox', 9)), $lock->scopes);
+    }
+
+    public function testABusyShopIsSkippedWithoutBlockingTheOthers()
+    {
+        $outbox = new WebhookOutboxRepositoryFake();
+        $gateway = new WebhookGatewayFake();
+        $lock = new WebhookLockFake();
+        $lock->unavailableShopIds = array(7);
+        $service = $this->service(new WebhookConfigurationFake(), $outbox, $gateway, 1700000000, $lock);
+        $service->enqueue(7, 'product.updated', 'product', 42);
+        $service->enqueue(9, 'product.updated', 'product', 42);
+
+        self::assertSame(1, $service->drain());
+        self::assertCount(1, $outbox->rows);
+        self::assertSame(7, $outbox->rows[0]['id_shop']);
+    }
+
+    public function testDrainingOneShopLeavesTheOtherShopQueued()
+    {
+        $outbox = new WebhookOutboxRepositoryFake();
+        $gateway = new WebhookGatewayFake();
+        $service = $this->service(new WebhookConfigurationFake(), $outbox, $gateway, 1700000000);
+        $service->enqueue(7, 'product.updated', 'product', 42);
+        $service->enqueue(9, 'product.updated', 'product', 42);
+
+        self::assertSame(1, $service->drainShop(9));
+        self::assertCount(1, $outbox->rows);
+        self::assertSame(7, $outbox->rows[0]['id_shop']);
+    }
+
+    private function service($configuration, $outbox, $gateway, $now, $lock = null)
     {
         return new WebhookOutbox(
             $configuration,
@@ -103,7 +163,7 @@ class WebhookOutboxTest extends TestCase
             $gateway,
             new WebhookShopDetailsFake(),
             new SecretGenerator(),
-            new WebhookLockFake(),
+            $lock === null ? new WebhookLockFake() : $lock,
             function () use ($now) {
                 return $now;
             }
@@ -122,6 +182,13 @@ class WebhookConfigurationFake implements ConfigurationRepositoryInterface
     public function getApiBaseUrl($shopId) { return 'https://actions.bemo.now'; }
     public function getAppBaseUrl($shopId) { return 'https://bemo.now'; }
     public function saveEndpoints($shopId, $apiBaseUrl, $appBaseUrl) { return true; }
+    public function saveActivationChoices($shopId, $approved, $embedded, $landing = CheckoutLanding::CART) { return true; }
+    public function isWebserviceAccessApproved($shopId) { return true; }
+    public function isEmbeddedCheckoutRequested($shopId) { return false; }
+    public function getCheckoutLanding($shopId) { return CheckoutLanding::CART; }
+    public function getConnectionStatus($shopId) { return 'ready_to_pair'; }
+    public function getCronToken($shopId) { return null; }
+    public function saveCronToken($shopId, $cronToken) { return true; }
     public function getWebserviceAccountId($shopId) { return null; }
     public function getWebserviceAccountIds() { return array(); }
     public function getPairingAttempt($shopId) { return null; }
@@ -136,12 +203,13 @@ class WebhookOutboxRepositoryFake implements OutboxRepositoryInterface
 {
     public $rows = array();
 
-    public function enqueue($shopId, $eventId, $rawPayload, $availableAt)
+    public function enqueue($shopId, $eventId, $resourceKey, $rawPayload, $availableAt)
     {
         $this->rows[] = array(
             'id_bemoliveshopping_outbox' => count($this->rows) + 1,
             'id_shop' => $shopId,
             'event_id' => $eventId,
+            'resource_key' => $resourceKey,
             'payload' => $rawPayload,
             'attempts' => 0,
             'status' => 'pending',
@@ -151,7 +219,24 @@ class WebhookOutboxRepositoryFake implements OutboxRepositoryInterface
         return true;
     }
 
-    public function getDue($limit, $now)
+    public function getDueShopIds($limit, $now)
+    {
+        $shopIds = array();
+        foreach ($this->due($now) as $row) {
+            $shopIds[] = (int) $row['id_shop'];
+        }
+
+        return array_values(array_unique($shopIds));
+    }
+
+    public function getDueForShop($shopId, $limit, $now)
+    {
+        return array_values(array_filter($this->due($now), function ($row) use ($shopId) {
+            return (int) $row['id_shop'] === (int) $shopId;
+        }));
+    }
+
+    private function due($now)
     {
         return array_values(array_filter($this->rows, function ($row) use ($now) {
             return $row['status'] === 'pending' && $row['available_at'] <= $now;
@@ -212,8 +297,16 @@ class WebhookShopDetailsFake implements ShopDetailsProviderInterface
 
 class WebhookLockFake implements ShopLockInterface
 {
+    public $scopes = array();
+    public $unavailableShopIds = array();
+
     public function synchronized($scope, $shopId, $callback)
     {
+        $this->scopes[] = array($scope, (int) $shopId);
+        if (in_array((int) $shopId, $this->unavailableShopIds, true)) {
+            throw new LockUnavailableException('busy');
+        }
+
         return call_user_func($callback);
     }
 }

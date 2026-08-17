@@ -6,7 +6,9 @@ if (!defined('_PS_VERSION_')) {
 
 use Bemo\LiveShopping\Checkout\BuyLinkVerifier;
 use Bemo\LiveShopping\Checkout\CheckoutEntryService;
+use Bemo\LiveShopping\Checkout\DbBuyLinkNonceRepository;
 use Bemo\LiveShopping\Checkout\PrestaShopCartCheckoutGateway;
+use Bemo\LiveShopping\Checkout\SingleUseBuyLinkVerifier;
 use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
 
 class BemoliveshoppingBuyModuleFrontController extends ModuleFrontController
@@ -25,7 +27,11 @@ class BemoliveshoppingBuyModuleFrontController extends ModuleFrontController
             $this->redirectToNotFound();
         }
 
-        $payload = (new BuyLinkVerifier())->verify(
+        $payload = (new SingleUseBuyLinkVerifier(
+            new BuyLinkVerifier(),
+            new DbBuyLinkNonceRepository(Db::getInstance())
+        ))->verify(
+            $shopId,
             $token,
             $credentials['buy_link_secret'],
             (int) floor(microtime(true) * 1000)

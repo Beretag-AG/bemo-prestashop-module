@@ -6,8 +6,6 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-use RuntimeException;
-
 class DbShopLock implements ShopLockInterface
 {
     const TIMEOUT_SECONDS = 10;
@@ -28,7 +26,7 @@ class DbShopLock implements ShopLockInterface
             "SELECT GET_LOCK('" . $quotedName . "', " . self::TIMEOUT_SECONDS . ')'
         );
         if ((string) $acquired !== '1') {
-            throw new RuntimeException('The BEMO shop configuration is busy. Retry in a moment.');
+            throw new LockUnavailableException('The BEMO shop configuration is busy. Retry in a moment.');
         }
 
         try {

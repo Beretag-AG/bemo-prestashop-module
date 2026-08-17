@@ -7,6 +7,7 @@ if (!defined('_PS_VERSION_')) {
 }
 
 use Bemo\LiveShopping\Configuration\ConfigurationRepositoryInterface;
+use Bemo\LiveShopping\Lock\LockUnavailableException;
 use Bemo\LiveShopping\Lock\ShopLockInterface;
 use Bemo\LiveShopping\Pairing\ShopDetailsProviderInterface;
 use Bemo\LiveShopping\Security\SecretGenerator;
@@ -62,54 +63,84 @@ class WebhookOutbox
         if (!$this->isAllowedEvent($hook, $resourceType) || (int) $resourceId <= 0) {
             return false;
         }
-        return $this->lock->synchronized('webhook-outbox', 0, function () use (
-            $hook,
-            $resourceId,
-            $resourceType,
-            $shopId
-        ) {
-            if (!is_array($this->configuration->getPairingCredentials($shopId))) {
-                return true;
-            }
-            $details = $this->shopDetails->get($shopId);
-            $occurredAt = (int) call_user_func($this->clock);
-            $eventId = $this->secrets->eventId();
-            $payload = json_encode(array(
-                'eventId' => $eventId,
-                'hook' => $hook,
-                'occurredAt' => $occurredAt * 1000,
-                'resourceId' => (int) $resourceId,
-                'resourceType' => $resourceType,
-                'shopId' => (int) $shopId,
-                'shopUrl' => $details['shopUrl'],
-            ));
-            if (!is_string($payload) || strlen($payload) > 16384) {
-                return false;
-            }
+        if (!is_array($this->configuration->getPairingCredentials($shopId))) {
+            return true;
+        }
 
-            return $this->outbox->enqueue(
-                $shopId,
-                $eventId,
-                $payload,
-                $occurredAt
-            );
-        });
+        $details = $this->shopDetails->get($shopId);
+        $occurredAt = (int) call_user_func($this->clock);
+        $eventId = $this->secrets->eventId();
+        $payload = json_encode(array(
+            'eventId' => $eventId,
+            'hook' => $hook,
+            'occurredAt' => $occurredAt * 1000,
+            'resourceId' => (int) $resourceId,
+            'resourceType' => $resourceType,
+            'shopId' => (int) $shopId,
+            'shopUrl' => $details['shopUrl'],
+        ));
+        if (!is_string($payload) || strlen($payload) > 16384) {
+            return false;
+        }
+
+        return $this->outbox->enqueue(
+            $shopId,
+            $eventId,
+            $resourceType . ':' . (int) $resourceId . ':' . $hook,
+            $payload,
+            $occurredAt
+        );
     }
 
     public function drain($limit = self::MAX_BATCH_SIZE)
     {
-        return $this->lock->synchronized('webhook-outbox', 0, function () use ($limit) {
-            return $this->drainLocked($limit);
-        });
-    }
-
-    private function drainLocked($limit)
-    {
         $now = (int) call_user_func($this->clock);
         $delivered = 0;
-        foreach ($this->outbox->getDue($limit, $now) as $row) {
+        $failure = null;
+        foreach ($this->outbox->getDueShopIds($limit, $now) as $shopId) {
+            try {
+                $delivered += $this->drainOneShop($shopId, $limit, $now);
+            } catch (RuntimeException $exception) {
+                $failure = $exception;
+            }
+        }
+        $this->purgeTerminal($now);
+        if ($failure !== null) {
+            throw $failure;
+        }
+
+        return $delivered;
+    }
+
+    public function drainShop($shopId, $limit = self::MAX_BATCH_SIZE)
+    {
+        $now = (int) call_user_func($this->clock);
+        $delivered = $this->drainOneShop($shopId, $limit, $now);
+        $this->purgeTerminal($now);
+
+        return $delivered;
+    }
+
+    private function drainOneShop($shopId, $limit, $now)
+    {
+        try {
+            return (int) $this->lock->synchronized(
+                'webhook-outbox',
+                (int) $shopId,
+                function () use ($shopId, $limit, $now) {
+                    return $this->deliverDue($shopId, $limit, $now);
+                }
+            );
+        } catch (LockUnavailableException $exception) {
+            return 0;
+        }
+    }
+
+    private function deliverDue($shopId, $limit, $now)
+    {
+        $delivered = 0;
+        foreach ($this->outbox->getDueForShop($shopId, $limit, $now) as $row) {
             $id = (int) $row['id_bemoliveshopping_outbox'];
-            $shopId = (int) $row['id_shop'];
             $credentials = $this->configuration->getPairingCredentials($shopId);
             if (!is_array($credentials)) {
                 if (!$this->outbox->delete($id)) {
@@ -140,11 +171,15 @@ class WebhookOutbox
                 }
             }
         }
+
+        return $delivered;
+    }
+
+    private function purgeTerminal($now)
+    {
         if (!$this->outbox->purgeTerminalBefore($now - self::TERMINAL_RETENTION_SECONDS)) {
             throw new RuntimeException('The BEMO webhook outbox could not purge expired terminal events.');
         }
-
-        return $delivered;
     }
 
     private function isAllowedEvent($hook, $resourceType)
