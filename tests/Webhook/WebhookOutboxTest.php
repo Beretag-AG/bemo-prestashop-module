@@ -236,6 +236,13 @@ class WebhookOutboxRepositoryFake implements OutboxRepositoryInterface
         }));
     }
 
+    public function countPending($shopId)
+    {
+        return count(array_filter($this->rows, function ($row) use ($shopId) {
+            return $row['status'] === 'pending' && (int) $row['id_shop'] === (int) $shopId;
+        }));
+    }
+
     private function due($now)
     {
         return array_values(array_filter($this->rows, function ($row) use ($now) {

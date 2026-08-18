@@ -24,6 +24,7 @@ use Bemo\LiveShopping\Pairing\PairingException;
 use Bemo\LiveShopping\Pairing\PairingResponseParser;
 use Bemo\LiveShopping\Pairing\PairingService;
 use Bemo\LiveShopping\Pairing\PrestaShopShopDetailsProvider;
+use Bemo\LiveShopping\Presentation\ConfigurationPageState;
 use Bemo\LiveShopping\Security\SecretGenerator;
 use Bemo\LiveShopping\Setup\ConnectionSetupService;
 use Bemo\LiveShopping\Webservice\PrestaShopWebserviceGateway;
@@ -34,8 +35,9 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.5.0';
+    const VERSION = '0.6.0';
     const CRON_CONTROLLER = 'cron';
+    const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
     /** @var string */
     private $output = '';
@@ -56,8 +58,8 @@ class Bemoliveshopping extends Module
         parent::__construct();
 
         $this->displayName = $this->l('BEMO Live Shopping');
-        $this->description = $this->l('Connect your PrestaShop catalog to BEMO live shopping sessions.');
-        $this->confirmUninstall = $this->l('Remove BEMO settings and the module-created Webservice key?');
+        $this->description = $this->l('Sell your products live: a BEMO creator streams a show, viewers buy in your shop.');
+        $this->confirmUninstall = $this->l('Uninstall BEMO Live Shopping? Your settings are deleted and the read-only catalog key is removed from this shop.');
     }
 
     public function install()
@@ -124,11 +126,16 @@ class Bemoliveshopping extends Module
             && $this->repairWebservicePermissions();
     }
 
+    public function upgradeToVersion060()
+    {
+        return $this->registerBemoHooks();
+    }
+
     public function getContent()
     {
         if (Shop::getContext() !== Shop::CONTEXT_SHOP) {
             return $this->displayError(
-                $this->l('Select one shop before configuring or activating BEMO. Credentials are isolated per shop.')
+                $this->l('Pick a single shop first. Each shop connects to BEMO with its own key.')
             );
         }
 
@@ -140,7 +147,18 @@ class Bemoliveshopping extends Module
             $this->saveConfiguration();
         }
 
-        return $this->output . $this->renderConnectionPanel() . $this->renderConfigurationForm();
+        $state = ConfigurationPageState::derive(
+            new DbConfigurationRepository(Db::getInstance()),
+            (int) $this->context->shop->id,
+            $this->isDeveloperMode()
+        );
+
+        return $this->output
+            . $this->renderWelcomePanel($state)
+            . $this->renderConnectionPanel($state)
+            . $this->renderCatalogSyncPanel($state)
+            . $this->renderConfigurationForm($state)
+            . $this->renderDisconnectPanel($state);
     }
 
     public function hookActionObjectProductAddAfter($params)
@@ -245,7 +263,7 @@ class Bemoliveshopping extends Module
             return;
         }
 
-        $this->output .= $this->displayConfirmation($this->l('BEMO module settings saved.'));
+        $this->output .= $this->displayConfirmation($this->l('Your settings are saved.'));
     }
 
     private function disconnectFromBemo()
@@ -264,7 +282,7 @@ class Bemoliveshopping extends Module
         }
 
         $this->output .= $this->displayConfirmation(
-            $this->l('This shop is disconnected from BEMO. The read-only catalog key was deleted and the stored credentials were cleared.')
+            $this->l('This shop is disconnected from BEMO. The catalog key was deleted and live shows can no longer sell your products.')
         );
     }
 
@@ -277,7 +295,7 @@ class Bemoliveshopping extends Module
             )
         )) {
             $this->output .= $this->displayError(
-                $this->l('Confirm that you understand the PrestaShop Webservice will be enabled for this shop.')
+                $this->l('Let BEMO read your catalog before you connect. Without it, BEMO cannot show your products in a live show.')
             );
 
             return;
@@ -328,7 +346,7 @@ class Bemoliveshopping extends Module
         } catch (Exception $exception) {
             PrestaShopLogger::addLog('BEMO account activation failed', 3);
             $this->output .= $this->displayError(
-                $this->l('The BEMO account could not be activated. Verify the settings and try again.')
+                $this->l('This shop could not be connected to BEMO. Check the settings below and try again.')
             );
         }
     }
@@ -392,7 +410,9 @@ class Bemoliveshopping extends Module
             $saved = false;
         }
         if (!$saved) {
-            $this->output .= $this->displayError($this->l('The BEMO configuration could not be saved.'));
+            $this->output .= $this->displayError(
+                $this->l('Your settings could not be saved. Try again in a moment.')
+            );
 
             return false;
         }
@@ -438,7 +458,9 @@ class Bemoliveshopping extends Module
             $saved = false;
         }
         if (!$saved) {
-            $this->output .= $this->displayError($this->l('The BEMO module settings could not be saved.'));
+            $this->output .= $this->displayError(
+                $this->l('Your choices could not be saved. Try again in a moment.')
+            );
 
             return false;
         }
@@ -469,7 +491,7 @@ class Bemoliveshopping extends Module
         }
         if (!$revoked) {
             $this->output .= $this->displayError(
-                $this->l('The BEMO catalog access could not be revoked. Retry in a moment.')
+                $this->l('Catalog access could not be turned off. Try again in a moment.')
             );
 
             return false;
@@ -527,73 +549,201 @@ class Bemoliveshopping extends Module
     private function pairingErrorMessage($reason)
     {
         if ($reason === PairingException::RATE_LIMITED) {
-            return $this->l('Too many pairing attempts were made. Wait a moment and try again.');
+            return $this->l('Too many connection attempts in a short time. Wait a moment and try again.');
         }
 
         if ($reason === PairingException::NETWORK) {
-            return $this->l('BEMO could not be reached. Verify the API URL and the shop network connection.');
+            return $this->l('BEMO could not be reached. Check that your shop can make outgoing requests, then try again.');
         }
 
         if ($reason === PairingException::CONFIGURATION) {
-            return $this->l('The BEMO API or app URL is invalid. Save valid HTTPS base URLs and try again.');
+            return $this->l('The BEMO addresses are not valid. Save valid HTTPS addresses and try again.');
         }
 
         if ($reason === PairingException::SHOP_CONTEXT) {
-            return $this->l('The shop needs an HTTPS URL, an active language, and an active currency before it can connect to BEMO.');
+            return $this->l('Your shop needs an HTTPS address, one active language, and one active currency before it can connect to BEMO.');
         }
 
         if ($reason === PairingException::CREDENTIALS || $reason === PairingException::PERSISTENCE) {
-            return $this->l('The BEMO credentials could not be prepared. Retry activation or contact BEMO support.');
+            return $this->l('The connection could not be prepared. Try again, and contact BEMO support if it keeps failing.');
         }
 
-        return $this->l('BEMO rejected the activation request. Retry to create a fresh pairing link.');
+        return $this->l('BEMO turned down the connection request. Try again to get a fresh connection link.');
     }
 
-    private function renderConnectionPanel()
+    private function renderWelcomePanel(ConfigurationPageState $state)
     {
+        if (!$state->isWelcome()) {
+            return '';
+        }
+
+        $this->context->smarty->assign(array(
+            'bemoTitle' => $this->l('Sell your products in live shows'),
+            'bemoLead' => $this->l(
+                'A BEMO creator streams a live show and viewers buy in your shop, in their own cart, at your prices.'
+            ),
+            'bemoStepsTitle' => $this->l('What happens when you connect'),
+            'bemoSteps' => array(
+                array(
+                    'title' => $this->l('A read-only key is created for your catalog.'),
+                    'text' => $this->l(
+                        'BEMO can read your products, prices, and stock. It can never change them or see your orders and customers.'
+                    ),
+                ),
+                array(
+                    'title' => $this->l('Your catalog stays in sync automatically.'),
+                    'text' => $this->l(
+                        'Every price, stock, and product change reaches BEMO within minutes, so viewers never see an offer you no longer sell.'
+                    ),
+                ),
+                array(
+                    'title' => $this->l('You choose how checkout opens.'),
+                    'text' => $this->l(
+                        'Viewers buy without leaving the show, or in a new tab in your shop. Either way they pay in your shop.'
+                    ),
+                ),
+            ),
+            'bemoSetupAnchor' => '#bemo-setup',
+            'bemoCta' => $this->l('Start setup'),
+            'bemoDocsUrl' => self::DOCS_URL,
+            'bemoDocsLabel' => $this->l('Read the setup guide'),
+        ));
+
+        return $this->display(__FILE__, 'views/templates/admin/welcome.tpl');
+    }
+
+    private function renderConnectionPanel(ConfigurationPageState $state)
+    {
+        if (!$state->showsStatusPanel()) {
+            return '';
+        }
+
         $repository = new DbConfigurationRepository(Db::getInstance());
         $shopId = (int) $this->context->shop->id;
-        $cronUrl = $this->cronUrl($shopId);
-        $rows = array(
-            $this->l('Connection status') => $this->connectionStatusLabel(
-                $repository->getConnectionStatus($shopId),
-                is_array($repository->getPairingCredentials($shopId))
+        $status = $this->connectionStatusBadge($state);
+
+        $this->context->smarty->assign(array(
+            'bemoTitle' => $this->l('Your BEMO connection'),
+            'bemoIntro' => $state->isWaiting()
+                ? $this->l(
+                    'Your shop is ready. A BEMO creator now has to claim it from their BEMO account to finish the connection. The claim link expires after a while: if nothing happens, restart the connection to get a new one.'
+                )
+                : '',
+            'bemoRows' => array(
+                array(
+                    'label' => $this->l('Status'),
+                    'value' => $status[0],
+                    'badge' => $status[1],
+                    'link' => false,
+                ),
+                array(
+                    'label' => $this->l('Your shop'),
+                    'value' => $this->context->shop->getBaseURL(true),
+                    'badge' => '',
+                    'link' => true,
+                ),
+                array(
+                    'label' => $this->l('BEMO'),
+                    'value' => $repository->getAppBaseUrl($shopId),
+                    'badge' => '',
+                    'link' => true,
+                ),
             ),
-            $this->l('Shop endpoint') => $this->context->shop->getBaseURL(true),
-            $this->l('BEMO app') => $repository->getAppBaseUrl($shopId),
-            $this->l('Catalog event drain URL') => $cronUrl === null
-                ? $this->l('Unavailable until the module settings can be saved.')
-                : $cronUrl,
-        );
+            'bemoRestartLabel' => $state->showsRestartAction() ? $this->l('Restart connection') : '',
+            'bemoFormAction' => $this->configurationFormAction(),
+            // Developer mode is the only case where the endpoints are editable,
+            // so the restart post has to carry what the settings form would send.
+            'bemoHiddenFields' => $state->showsEndpointFields()
+                ? array(
+                    'BEMO_API_BASE_URL' => $repository->getApiBaseUrl($shopId),
+                    'BEMO_APP_BASE_URL' => $repository->getAppBaseUrl($shopId),
+                )
+                : array(),
+        ));
 
-        $html = '<div class="panel"><h3><i class="icon-link"></i> ' . $this->l('BEMO connection') . '</h3><ul>';
-        foreach ($rows as $label => $value) {
-            $html .= '<li><strong>' . $label . ':</strong> ' . Tools::safeOutput($value) . '</li>';
-        }
-        $html .= '</ul><p>' . $this->l(
-            'Call the drain URL from a scheduler every few minutes so queued catalog events reach BEMO. Treat it as a secret: its token is the only thing that authorizes the drain.'
-        ) . '</p>';
-
-        if (!$this->isCronModuleActive()) {
-            $html .= '<p class="alert alert-warning">' . $this->l(
-                'The PrestaShop Cron tasks manager module is not installed or not active. Schedule the drain URL above with your own scheduler, otherwise catalog changes stay queued.'
-            ) . '</p>';
-        }
-
-        return $html . '</div>';
+        return $this->display(__FILE__, 'views/templates/admin/connection-status.tpl');
     }
 
-    private function connectionStatusLabel($status, $hasCredentials)
+    private function renderCatalogSyncPanel(ConfigurationPageState $state)
     {
-        if (!$hasCredentials) {
-            return $this->l('Not connected');
+        if (!$state->showsCatalogSyncPanel()) {
+            return '';
         }
 
-        if ($status === 'pairing_starting' || $status === 'pairing_pending') {
-            return $this->l('Waiting for a BEMO account to claim this shop');
+        $shopId = (int) $this->context->shop->id;
+        $cronUrl = $this->cronUrl($shopId);
+        $scheduled = $this->isCronModuleActive();
+
+        $this->context->smarty->assign(array(
+            'bemoTitle' => $this->l('Catalog sync'),
+            'bemoWarning' => $scheduled
+                ? ''
+                : $this->l(
+                    'Nothing runs the sync on a schedule yet. Until something calls the address below every few minutes, your catalog changes stay queued and viewers see outdated products.'
+                ),
+            'bemoRows' => array(
+                array(
+                    'label' => $this->l('Scheduler'),
+                    'value' => $scheduled
+                        ? $this->l('The PrestaShop Cron tasks manager runs the sync for this shop.')
+                        : $this->l('None detected. Set one up with the address below.'),
+                ),
+                array(
+                    'label' => $this->l('Changes waiting to be sent'),
+                    'value' => (string) (new DbOutboxRepository(Db::getInstance()))->countPending($shopId),
+                ),
+            ),
+            'bemoSyncUrl' => $cronUrl === null ? '' : $cronUrl,
+            'bemoSyncUrlLabel' => $this->l('Sync address'),
+            'bemoSyncUrlHelp' => $this->l(
+                'Call this address every few minutes from your own scheduler, for example a cron job. Keep it private: anyone who has it can trigger a sync of this shop.'
+            ),
+            'bemoSyncUrlUnavailable' => $this->l(
+                'The sync address is not available yet. Save your settings once and it appears here.'
+            ),
+        ));
+
+        return $this->display(__FILE__, 'views/templates/admin/catalog-sync.tpl');
+    }
+
+    private function renderDisconnectPanel(ConfigurationPageState $state)
+    {
+        if (!$state->showsDisconnectPanel()) {
+            return '';
         }
 
-        return $this->l('Connected with read-only catalog access');
+        $this->context->smarty->assign(array(
+            'bemoTitle' => $this->l('Disconnect from BEMO'),
+            'bemoText' => $this->l(
+                'Disconnecting stops live selling for this shop: the catalog key is deleted and BEMO stops receiving your catalog changes. Your products, orders, and settings in PrestaShop stay untouched, and you can connect again at any time.'
+            ),
+            'bemoButtonLabel' => $this->l('Disconnect from BEMO'),
+            'bemoConfirm' => $this->l(
+                'Disconnect this shop from BEMO? Live shows can no longer sell your products until you connect again.'
+            ),
+            'bemoFormAction' => $this->configurationFormAction(),
+        ));
+
+        return $this->display(__FILE__, 'views/templates/admin/disconnect.tpl');
+    }
+
+    private function connectionStatusBadge(ConfigurationPageState $state)
+    {
+        if ($state->isWaiting()) {
+            return array($this->l('Waiting for a BEMO creator to claim this shop'), 'label-warning');
+        }
+
+        if ($state->isConnected()) {
+            return array($this->l('Connected'), 'label-success');
+        }
+
+        return array($this->l('Not connected'), 'label-default');
+    }
+
+    private function configurationFormAction()
+    {
+        return AdminController::$currentIndex . '&configure=' . $this->name
+            . '&token=' . Tools::getAdminTokenLite('AdminModules');
     }
 
     private function isCronModuleActive()
@@ -629,7 +779,7 @@ class Bemoliveshopping extends Module
         return $repository->saveCronToken($shopId, $token) ? $token : null;
     }
 
-    private function renderConfigurationForm()
+    private function renderConfigurationForm(ConfigurationPageState $state)
     {
         $repository = new DbConfigurationRepository(Db::getInstance());
         $shopId = (int) $this->context->shop->id;
@@ -638,7 +788,9 @@ class Bemoliveshopping extends Module
         $helper->name_controller = $this->name;
         $helper->token = Tools::getAdminTokenLite('AdminModules');
         $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
-        $helper->submit_action = 'submitBemoConfiguration';
+        $helper->submit_action = $state->showsConnectAction()
+            ? 'submitBemoActivateAccount'
+            : 'submitBemoConfiguration';
         $helper->default_form_language = (int) Configuration::get('PS_LANG_DEFAULT');
         $normalizer = new EndpointNormalizer();
         $policy = new EndpointPolicy($normalizer, $this->isDeveloperMode());
@@ -659,106 +811,109 @@ class Bemoliveshopping extends Module
             'BEMO_CHECKOUT_LANDING' => $repository->getCheckoutLanding($shopId),
         );
 
-        return $helper->generateForm(array($this->configurationForm($environmentValues !== null)));
+        return '<div id="bemo-setup">'
+            . $helper->generateForm(array($this->configurationForm($state, $environmentValues !== null)))
+            . '</div>';
     }
 
-    private function configurationForm($environmentEndpointsLocked = false)
+    private function configurationForm(ConfigurationPageState $state, $environmentEndpointsLocked = false)
     {
-        $endpointsReadonly = !$this->isDeveloperMode() || $environmentEndpointsLocked;
+        $inputs = array();
+        if ($state->showsEndpointFields()) {
+            $inputs[] = array(
+                'type' => 'text',
+                'label' => $this->l('BEMO API URL'),
+                'name' => 'BEMO_API_BASE_URL',
+                'required' => true,
+                'readonly' => $environmentEndpointsLocked,
+            );
+            $inputs[] = array(
+                'type' => 'text',
+                'label' => $this->l('BEMO app URL'),
+                'name' => 'BEMO_APP_BASE_URL',
+                'required' => true,
+                'readonly' => $environmentEndpointsLocked,
+            );
+        }
+
+        $inputs[] = array(
+            'type' => 'switch',
+            'label' => $this->l('Let BEMO read your catalog'),
+            'name' => 'BEMO_CONFIRM_WEBSERVICE',
+            'is_bool' => true,
+            'desc' => $state->isWelcome()
+                ? $this->l(
+                    'Required to connect. BEMO can read your products, prices, and stock. It can never change them or see your orders and customers.'
+                )
+                : $this->l(
+                    'BEMO can read your products, prices, and stock. It can never change them or see your orders and customers. Turning this off disconnects the shop and deletes the catalog key.'
+                ),
+            'values' => array(
+                array('id' => 'bemo_ws_on', 'value' => 1, 'label' => $this->l('Yes')),
+                array('id' => 'bemo_ws_off', 'value' => 0, 'label' => $this->l('No')),
+            ),
+        );
+        $inputs[] = array(
+            'type' => 'switch',
+            'label' => $this->l('Let viewers buy without leaving the show'),
+            'name' => 'BEMO_CONFIRM_EMBEDDED_CHECKOUT',
+            'is_bool' => true,
+            'desc' => $this->l(
+                'Viewers add products and pay while they keep watching, which sells more than sending them away to a new tab. Your shop needs HTTPS, cross-site checkout cookies, and framing headers that allow BEMO. BEMO checks this once per shop, and until then your shop opens in a new tab.'
+            ),
+            'values' => array(
+                array('id' => 'bemo_embed_on', 'value' => 1, 'label' => $this->l('Yes')),
+                array('id' => 'bemo_embed_off', 'value' => 0, 'label' => $this->l('No')),
+            ),
+        );
+        $inputs[] = array(
+            'type' => 'radio',
+            'label' => $this->l('After a viewer adds a product'),
+            'name' => 'BEMO_CHECKOUT_LANDING',
+            'desc' => $this->l(
+                'Send viewers to the cart so they can keep watching and add more, or straight to checkout to close the sale now. This applies to the next product a viewer clicks.'
+            ),
+            'values' => array(
+                array(
+                    'id' => 'bemo_checkout_landing_cart',
+                    'value' => CheckoutLanding::CART,
+                    'label' => $this->l('Open the cart (recommended)'),
+                ),
+                array(
+                    'id' => 'bemo_checkout_landing_checkout',
+                    'value' => CheckoutLanding::CHECKOUT,
+                    'label' => $this->l('Go straight to checkout'),
+                ),
+            ),
+        );
 
         return array(
             'form' => array(
                 'legend' => array(
-                    'title' => $this->l('Connect this shop to BEMO'),
-                    'icon' => 'icon-link',
+                    'title' => $state->isWelcome() ? $this->l('Set up this shop') : $this->l('Settings'),
+                    'icon' => 'icon-cogs',
                 ),
-                'description' => $this->l(
-                    'Choose the checkout experience, save your preferences, then connect this shop to the BEMO account that should use its catalog.'
-                ),
-                'input' => array(
-                    array(
-                        'type' => 'text',
-                        'label' => $this->l('BEMO API URL'),
-                        'name' => 'BEMO_API_BASE_URL',
-                        'required' => true,
-                        'readonly' => $endpointsReadonly,
+                'description' => $state->isWelcome()
+                    ? $this->l(
+                        'Confirm these choices, then connect this shop to the BEMO account that will sell your products.'
+                    )
+                    : $this->l(
+                        'Change how BEMO reads your catalog and how viewers check out.'
                     ),
-                    array(
-                        'type' => 'text',
-                        'label' => $this->l('BEMO app URL'),
-                        'name' => 'BEMO_APP_BASE_URL',
-                        'required' => true,
-                        'readonly' => $endpointsReadonly,
-                    ),
-                    array(
-                        'type' => 'switch',
-                        'label' => $this->l('Allow read-only catalog access'),
-                        'name' => 'BEMO_CONFIRM_WEBSERVICE',
-                        'is_bool' => true,
-                        'desc' => $this->l(
-                            'Required to connect. BEMO enables the PrestaShop Webservice and creates a module-owned read-only key only when you click Save and connect to BEMO.'
-                        ),
-                        'values' => array(
-                            array('id' => 'bemo_ws_on', 'value' => 1, 'label' => $this->l('Yes')),
-                            array('id' => 'bemo_ws_off', 'value' => 0, 'label' => $this->l('No')),
-                        ),
-                    ),
-                    array(
-                        'type' => 'switch',
-                        'label' => $this->l('Open the shop inside BEMO'),
-                        'name' => 'BEMO_CONFIRM_EMBEDDED_CHECKOUT',
-                        'is_bool' => true,
-                        'desc' => $this->l(
-                            'Choose Yes to request the embedded cart and checkout. Your shop must use HTTPS, cross-site checkout cookies, and framing headers that allow BEMO. BEMO reviews this once per shop; until approval, the shop safely opens in a new tab.'
-                        ),
-                        'values' => array(
-                            array('id' => 'bemo_embed_on', 'value' => 1, 'label' => $this->l('Yes')),
-                            array('id' => 'bemo_embed_off', 'value' => 0, 'label' => $this->l('No')),
-                        ),
-                    ),
-                    array(
-                        'type' => 'radio',
-                        'label' => $this->l('After adding a product'),
-                        'name' => 'BEMO_CHECKOUT_LANDING',
-                        'desc' => $this->l(
-                            'Open the cart so viewers can keep shopping, or continue directly to checkout. This choice applies immediately to new BEMO product clicks.'
-                        ),
-                        'values' => array(
-                            array(
-                                'id' => 'bemo_checkout_landing_cart',
-                                'value' => CheckoutLanding::CART,
-                                'label' => $this->l('Open the cart (recommended)'),
-                            ),
-                            array(
-                                'id' => 'bemo_checkout_landing_checkout',
-                                'value' => CheckoutLanding::CHECKOUT,
-                                'label' => $this->l('Continue directly to checkout'),
-                            ),
-                        ),
-                    ),
-                ),
-                'buttons' => array(
-                    array(
+                'input' => $inputs,
+                'submit' => $state->showsConnectAction()
+                    ? array(
                         'title' => $this->l('Save and connect to BEMO'),
                         'name' => 'submitBemoActivateAccount',
-                        'type' => 'submit',
-                        'class' => 'btn btn-default pull-left',
+                        'class' => 'btn btn-primary pull-right',
                         'icon' => 'process-icon-key',
+                    )
+                    : array(
+                        'title' => $this->l('Save settings'),
+                        'name' => 'submitBemoConfiguration',
+                        'class' => 'btn btn-primary pull-right',
+                        'icon' => 'process-icon-save',
                     ),
-                    array(
-                        'title' => $this->l('Disconnect from BEMO'),
-                        'name' => 'submitBemoDisconnect',
-                        'type' => 'submit',
-                        'class' => 'btn btn-default pull-left',
-                        'icon' => 'process-icon-delete',
-                        'js' => 'onclick="return confirm(\'' . $this->l(
-                            'Disconnect this shop from BEMO? The read-only catalog key is deleted and BEMO stops receiving catalog events until you connect again.'
-                        ) . '\');"',
-                    ),
-                ),
-                'submit' => array(
-                    'title' => $this->l('Save settings'),
-                ),
             ),
         );
     }

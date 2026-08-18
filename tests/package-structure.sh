@@ -21,14 +21,23 @@ for required in \
   bemoliveshopping/controllers/front/productlinks.php \
   bemoliveshopping/src/Checkout/index.php \
   bemoliveshopping/src/Pairing/index.php \
+  bemoliveshopping/src/Presentation/index.php \
   bemoliveshopping/src/Webhook/index.php \
+  bemoliveshopping/views/index.php \
+  bemoliveshopping/views/templates/index.php \
+  bemoliveshopping/views/templates/admin/index.php \
+  bemoliveshopping/views/templates/admin/welcome.tpl \
+  bemoliveshopping/views/templates/admin/connection-status.tpl \
+  bemoliveshopping/views/templates/admin/catalog-sync.tpl \
+  bemoliveshopping/views/templates/admin/disconnect.tpl \
   bemoliveshopping/upgrade/index.php \
   bemoliveshopping/upgrade/upgrade-0.2.0.php \
   bemoliveshopping/upgrade/upgrade-0.3.0.php \
   bemoliveshopping/upgrade/upgrade-0.3.1.php \
   bemoliveshopping/upgrade/upgrade-0.3.4.php \
   bemoliveshopping/upgrade/upgrade-0.4.0.php \
-  bemoliveshopping/upgrade/upgrade-0.5.0.php; do
+  bemoliveshopping/upgrade/upgrade-0.5.0.php \
+  bemoliveshopping/upgrade/upgrade-0.6.0.php; do
   if ! grep -Fx "$required" <<<"$entries" >/dev/null; then
     echo "Archive is missing $required." >&2
     exit 1

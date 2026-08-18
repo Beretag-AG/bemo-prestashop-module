@@ -97,6 +97,15 @@ class DbOutboxRepository implements OutboxRepositoryInterface
         return is_array($rows) ? $rows : array();
     }
 
+    public function countPending($shopId)
+    {
+        return (int) $this->db->getValue(
+            'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'bemoliveshopping_outbox`'
+            . ' WHERE `id_shop` = ' . (int) $shopId
+            . " AND `status` = 'pending'"
+        );
+    }
+
     public function delete($outboxId)
     {
         return (bool) $this->db->delete(

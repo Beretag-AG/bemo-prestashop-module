@@ -68,26 +68,32 @@ To install it in a development or staging shop:
 2. Select **Upload a module**.
 3. Upload `bemoliveshopping.zip`.
 4. Open **BEMO Live Shopping → Configure**.
-5. Confirm the production BEMO endpoints. Custom endpoints are available only
-   when PrestaShop developer mode is enabled.
-6. Review the shop choices, including whether BEMO product clicks open the
-   cart or continue directly to checkout. Click **Save settings** to keep them
-   without connecting, or click **Save and connect to BEMO** to provision
-   read-only access and choose the BEMO account for this shop.
+5. Review the setup choices: read-only catalog access, whether viewers may buy
+   without leaving the show, and whether a product click opens the cart or
+   continues directly to checkout.
+6. Click **Save and connect to BEMO**, then claim the shop from the BEMO
+   account that should sell its products. Until it is claimed, the page offers
+   **Restart connection** to request a fresh claim link.
+
+The configuration page follows the connection: a first-run welcome and the
+setup choices before connecting, a claim status while BEMO has not claimed the
+shop yet, and the connection, catalog sync, settings, and disconnect panels once
+it has. The BEMO endpoints are editable only when PrestaShop developer mode is
+enabled; otherwise the production endpoints are used and hidden.
 
 Queued catalog events need a scheduler. Either keep the **Cron tasks manager**
-module active, or call the drain URL shown on the configuration page from the
-hosting platform's scheduler, for example every five minutes:
+module active, or call the sync address shown in the **Catalog sync** panel from
+the hosting platform's scheduler, for example every five minutes:
 
 ```cron
 */5 * * * * curl -sS -o /dev/null 'https://shop.example/module/bemoliveshopping/cron?token=...'
 ```
 
-The drain URL carries a per-shop token and does nothing else. Treat it like a
+The sync address carries a per-shop token and does nothing else. Treat it like a
 credential: anyone holding it can trigger delivery of already-queued events.
 
-To stop the integration, open **BEMO Live Shopping → Configure** and select
-**Disconnect from BEMO**. That deletes the module-created Webservice key and
+To stop the integration, open **BEMO Live Shopping → Configure** and use the
+**Disconnect from BEMO** panel at the bottom of the page. That deletes the module-created Webservice key and
 clears the stored credentials for the current shop.
 
 ## Embedded checkout
@@ -135,7 +141,7 @@ Ask the merchant or hosting provider to complete these steps on a staging copy
 before BEMO enables embedded checkout on the live shop:
 
 1. Install or upgrade **BEMO Live Shopping 0.5.0 or newer** and schedule the
-   event drain, either with **Cron tasks manager** or with the drain URL.
+   catalog sync, either with **Cron tasks manager** or with the sync address.
 2. Enable HTTPS for the entire storefront, including cart, checkout, payment,
    return, and confirmation pages.
 3. Set **Cookie SameSite** to **None** under **Advanced Parameters →
