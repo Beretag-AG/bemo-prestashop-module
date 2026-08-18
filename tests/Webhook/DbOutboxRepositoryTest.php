@@ -116,6 +116,18 @@ class DbOutboxRepositoryTest extends TestCase
         self::assertStringContainsString('LIMIT 25', $db->executedS[0]);
     }
 
+    public function testCountsOnlyThePendingEventsOfOneShop()
+    {
+        $db = new OutboxDbFake();
+        $db->pendingCount = 4;
+
+        self::assertSame(4, (new DbOutboxRepository($db))->countPending(7));
+        self::assertCount(1, $db->getValueQueries);
+        self::assertStringContainsString('COUNT(*)', $db->getValueQueries[0]);
+        self::assertStringContainsString('`id_shop` = 7', $db->getValueQueries[0]);
+        self::assertStringContainsString("`status` = 'pending'", $db->getValueQueries[0]);
+    }
+
     public function testListsTheShopsWithDueEvents()
     {
         $db = new OutboxDbFake();

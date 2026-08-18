@@ -14,6 +14,8 @@ interface OutboxRepositoryInterface
 
     public function getDueForShop($shopId, $limit, $now);
 
+    public function countPending($shopId);
+
     public function delete($outboxId);
 
     public function markFailure($outboxId, $attempts, $availableAt, $terminal);
