@@ -14,7 +14,10 @@ class EndpointEnvironment
     /** @var callable */
     private $reader;
 
-    public function __construct(?callable $reader = null)
+    /**
+     * @param callable|null $reader
+     */
+    public function __construct($reader = null)
     {
         $this->reader = $reader ?: function ($name) {
             return getenv($name);

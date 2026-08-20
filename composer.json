@@ -4,7 +4,7 @@
   "type": "prestashop-module",
   "license": "AFL-3.0",
   "require": {
-    "php": ">=7.2.5 <8.2"
+    "php": ">=7.0 <8.2"
   },
   "require-dev": {
     "phpunit/phpunit": "^8.5"
@@ -28,12 +28,14 @@
   },
   "scripts": {
     "check:php": "bash scripts/check-php-matrix.sh",
+    "check:php-compatibility": "php tests/php-compatibility.php",
     "check:package": "bash tests/package-structure.sh",
     "package": "bash scripts/package.sh",
     "test": "phpunit",
     "test:matrix": "bash scripts/test-php-matrix.sh",
     "verify": [
       "@check:php",
+      "@check:php-compatibility",
       "@test:matrix",
       "@check:package"
     ]

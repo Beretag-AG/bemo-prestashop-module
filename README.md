@@ -17,11 +17,11 @@ merchant's own storefront.
 
 | Component | Supported versions |
 | --- | --- |
-| PrestaShop | 1.7.6 through 8.x |
-| PHP | 7.2.5 through 8.1 |
+| PrestaShop | 1.7.3.1 through 8.x |
+| PHP | 7.0 through 8.1 |
 | Scheduler | PrestaShop Cron tasks manager (`cronjobs`) **or** any scheduler that can call a URL |
 
-PrestaShop 1.7.6 installations running PHP 5.6–7.1 must upgrade PHP before
+PrestaShop 1.7.3 installations running PHP 5.4–5.6 must upgrade PHP before
 installing this module. PrestaShop 9 is not supported by the current release.
 
 ## Current capabilities
@@ -181,13 +181,13 @@ testing the two supported runtime edges independently.
 
 ```bash
 brew tap shivammathur/php
-brew install php php@8.1 shivammathur/php/php@7.2 composer
-brew unlink php@7.2
+brew install php php@8.1 shivammathur/php/php@7.0 shivammathur/php/php@7.2 composer
+brew unlink php@7.0
 brew link php
 ```
 
-This leaves the current stable PHP as the default and keeps PHP 7.2 and 8.1
-available as keg-only compatibility runtimes.
+This leaves the current stable PHP as the default and keeps PHP 7.0, 7.2, and
+8.1 available as keg-only compatibility runtimes.
 
 ### Install and verify
 
@@ -198,12 +198,13 @@ composer verify
 
 `composer verify` runs:
 
-- syntax checks on PHP 7.2 and PHP 8.1;
+- syntax checks on PHP 7.0 and PHP 8.1;
 - the unit suite on both runtimes;
 - validation of the installable ZIP structure.
 
-Composer resolves dependencies against PHP 7.2.5 so the lockfile cannot
-silently select packages that require a newer module runtime.
+The module has no production Composer packages. Composer resolves development
+dependencies against PHP 7.2.5, the minimum version supported by the test
+framework. The PHP 7.0 syntax check covers the shipped module separately.
 
 ### Worktrees
 

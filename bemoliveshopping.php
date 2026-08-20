@@ -35,7 +35,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.6.0';
+    const VERSION = '0.6.1';
     const CRON_CONTROLLER = 'cron';
     const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
@@ -51,7 +51,7 @@ class Bemoliveshopping extends Module
         $this->need_instance = 0;
         $this->bootstrap = true;
         $this->ps_versions_compliancy = array(
-            'min' => '1.7.6.0',
+            'min' => '1.7.3.1',
             'max' => '8.99.99',
         );
 
@@ -64,8 +64,8 @@ class Bemoliveshopping extends Module
 
     public function install()
     {
-        if (version_compare(PHP_VERSION, '7.2.5', '<')) {
-            $this->_errors[] = $this->l('BEMO Live Shopping requires PHP 7.2.5 or newer.');
+        if (version_compare(PHP_VERSION, '7.0', '<')) {
+            $this->_errors[] = $this->l('BEMO Live Shopping requires PHP 7.0 or newer.');
 
             return false;
         }
