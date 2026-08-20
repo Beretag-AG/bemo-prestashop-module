@@ -60,13 +60,13 @@ composer install
 composer package
 ```
 
-This creates `dist/bemoliveshopping.zip`.
+This creates `dist/bemoliveshopping-<version>.zip`.
 
 To install it in a development or staging shop:
 
 1. Open **Modules → Module Manager** in PrestaShop Back Office.
 2. Select **Upload a module**.
-3. Upload `bemoliveshopping.zip`.
+3. Upload `bemoliveshopping-<version>.zip`.
 4. Open **BEMO Live Shopping → Configure**.
 5. Review the setup choices: read-only catalog access, whether viewers may buy
    without leaving the show, and whether a product click opens the cart or
