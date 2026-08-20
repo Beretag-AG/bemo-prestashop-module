@@ -20,7 +20,7 @@ mkdir -p "$repository_root/dist"
 git -C "$repository_root" archive --format=tar --mtime="@$source_date_epoch" --prefix=bemoliveshopping/ "$source_tree" \
   | tar -xf - -C "$temporary_root"
 
-artifact="$repository_root/dist/bemoliveshopping.zip"
+artifact="$repository_root/dist/bemoliveshopping-$version.zip"
 rm -f "$artifact"
 
 (
