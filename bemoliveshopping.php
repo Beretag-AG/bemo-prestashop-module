@@ -35,7 +35,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.6.1';
+    const VERSION = '0.6.2';
     const CRON_CONTROLLER = 'cron';
     const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
@@ -676,28 +676,48 @@ class Bemoliveshopping extends Module
 
         $this->context->smarty->assign(array(
             'bemoTitle' => $this->l('Catalog sync'),
+            'bemoScheduled' => $scheduled,
+            'bemoStatusTitle' => $scheduled
+                ? $this->l('Automatic sync is enabled')
+                : $this->l('A scheduler still needs to be configured'),
+            'bemoStatusText' => $scheduled
+                ? $this->l(
+                    'BEMO is registered with PrestaShop Cron tasks manager. There is nothing else to configure here. Catalog changes are sent whenever that manager runs.'
+                )
+                : $this->l(
+                    'BEMO records catalog changes, but it cannot send them until a scheduler calls the private sync address below.'
+                ),
             'bemoWarning' => $scheduled
                 ? ''
                 : $this->l(
-                    'Nothing runs the sync on a schedule yet. Until something calls the address below every few minutes, your catalog changes stay queued and viewers see outdated products.'
+                    'Catalog changes will remain queued until you complete one of the manual setup options below.'
                 ),
             'bemoRows' => array(
                 array(
                     'label' => $this->l('Scheduler'),
                     'value' => $scheduled
-                        ? $this->l('The PrestaShop Cron tasks manager runs the sync for this shop.')
-                        : $this->l('None detected. Set one up with the address below.'),
+                        ? $this->l('Automatic, through PrestaShop Cron tasks manager')
+                        : $this->l('Not detected'),
                 ),
                 array(
                     'label' => $this->l('Changes waiting to be sent'),
                     'value' => (string) (new DbOutboxRepository(Db::getInstance()))->countPending($shopId),
                 ),
             ),
-            'bemoSyncUrl' => $cronUrl === null ? '' : $cronUrl,
-            'bemoSyncUrlLabel' => $this->l('Sync address'),
-            'bemoSyncUrlHelp' => $this->l(
-                'Call this address every few minutes from your own scheduler, for example a cron job. Keep it private: anyone who has it can trigger a sync of this shop.'
+            'bemoQueueHelp' => $this->l(
+                'A small number can appear briefly after a product, price, or stock change. If this number keeps growing, the scheduler is not running correctly.'
             ),
+            'bemoManualTitle' => $scheduled
+                ? $this->l('Manual scheduler setup (only needed if automatic sync stops)')
+                : $this->l('Manual scheduler setup'),
+            'bemoManualIntro' => $this->l(
+                'In your hosting panel or server scheduler, create a job that opens this address every 5 minutes.'
+            ),
+            'bemoManualStepOne' => $this->l('Schedule an HTTP GET request every 5 minutes.'),
+            'bemoManualStepTwo' => $this->l('Use the private address shown below as the request URL.'),
+            'bemoManualStepThree' => $this->l('Do not share this address. Anyone who has it can start a catalog sync for this shop.'),
+            'bemoSyncUrl' => $cronUrl === null ? '' : $cronUrl,
+            'bemoSyncUrlLabel' => $this->l('Private sync address'),
             'bemoSyncUrlUnavailable' => $this->l(
                 'The sync address is not available yet. Save your settings once and it appears here.'
             ),
