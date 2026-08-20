@@ -15,12 +15,12 @@ resolve_brew_php() {
   printf '%s\n' "$prefix/bin/php"
 }
 
-php_72="${PHP_72_BIN:-}"
+php_70="${PHP_70_BIN:-}"
 php_81="${PHP_81_BIN:-}"
 
-if [[ -z "$php_72" ]]; then
-  php_72="$(resolve_brew_php php@7.2)" || {
-    echo "PHP 7.2 not found. Set PHP_72_BIN or install shivammathur/php/php@7.2." >&2
+if [[ -z "$php_70" ]]; then
+  php_70="$(resolve_brew_php php@7.0)" || {
+    echo "PHP 7.0 not found. Set PHP_70_BIN or install shivammathur/php/php@7.0." >&2
     exit 1
   }
 fi
@@ -32,4 +32,4 @@ if [[ -z "$php_81" ]]; then
   }
 fi
 
-printf '%s\0' "$php_72" "$php_81"
+printf '%s\0' "$php_70" "$php_81"

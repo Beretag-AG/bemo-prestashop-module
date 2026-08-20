@@ -19,7 +19,7 @@ share only versioned HTTP contracts and committed fixtures.
 | [BEMO-363](https://linear.app/watchonbemo/issue/BEMO-363) | Backlog | Validator preparation and Marketplace submission |
 
 Current Marketplace policy requires new submissions to support PrestaShop 9.
-That conflicts with BEMO-359's declared 1.7.6/8.x runtime target. BEMO-363 is
+That conflicts with BEMO-359's declared 1.7.3.1/8.x runtime target. BEMO-363 is
 therefore not ready for submission until the module gains and verifies a
 PrestaShop 9 compatibility lane; direct ZIP installation for the pilot remains
 independent of Marketplace review.
