@@ -91,7 +91,10 @@ class PrestaShopCartCheckoutGateway implements CartCheckoutGatewayInterface
 
     public function getOrCreateCart()
     {
-        if (!isset($this->context->cart) || !is_object($this->context->cart)) {
+        if (!isset($this->context->cart)
+            || !is_object($this->context->cart)
+            || !isset($this->context->cookie)
+            || !is_object($this->context->cookie)) {
             return null;
         }
         $cart = $this->context->cart;

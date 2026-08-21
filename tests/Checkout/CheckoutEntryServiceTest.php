@@ -94,6 +94,23 @@ class CheckoutEntryServiceTest extends TestCase
         self::assertSame(array(array(119, 0, 2)), $gateway->decreases);
         self::assertNull($gateway->persisted);
     }
+
+    public function testRollsBackAppliedLinesWhenTheCartCannotBePersisted()
+    {
+        $gateway = new CartGatewayFake();
+        $gateway->cart = (object) array('id' => 71);
+        $gateway->persistSucceeds = false;
+
+        self::assertNull((new CheckoutEntryService($gateway))->enter(array(
+            array('externalProductId' => 119, 'quantity' => 2),
+            array('externalProductId' => 120, 'quantity' => 1),
+        )));
+        self::assertSame(
+            array(array(120, 0, 1), array(119, 0, 2)),
+            $gateway->decreases
+        );
+        self::assertSame($gateway->cart, $gateway->persisted);
+    }
 }
 
 class CartGatewayFake implements CartCheckoutGatewayInterface
@@ -106,6 +123,7 @@ class CartGatewayFake implements CartCheckoutGatewayInterface
     public $decreases = array();
     public $failedIncreaseProductId;
     public $persisted;
+    public $persistSucceeds = true;
     public $cartRequests = 0;
     public $legacyMinimum = 1;
 
@@ -163,7 +181,7 @@ class CartGatewayFake implements CartCheckoutGatewayInterface
     {
         $this->persisted = $cart;
 
-        return true;
+        return $this->persistSucceeds;
     }
 
     public function getCartUrl()

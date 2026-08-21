@@ -74,6 +74,8 @@ class CheckoutEntryService
         }
 
         if (!$this->gateway->persistCart($cart)) {
+            $this->rollBackIncreases($cart, $applied);
+
             return null;
         }
 
