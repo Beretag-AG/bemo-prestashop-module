@@ -16,10 +16,7 @@ jobs:
       - run: bash scripts/package.sh
       - run: bash scripts/package.sh staging
       - run: bash tests/package-structure.sh
-      - run: cp "dist/bemoliveshopping-${GITHUB_REF_NAME#v}.zip" dist/bemoliveshopping.zip
       - uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/bemoliveshopping-*.zip
-            dist/bemoliveshopping.zip
+          files: dist/bemoliveshopping-*.zip
           generate_release_notes: true

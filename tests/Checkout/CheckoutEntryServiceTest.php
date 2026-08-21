@@ -4,118 +4,128 @@ namespace Bemo\LiveShopping\Tests\Checkout;
 
 use Bemo\LiveShopping\Checkout\CartCheckoutGatewayInterface;
 use Bemo\LiveShopping\Checkout\CheckoutEntryService;
-use Bemo\LiveShopping\Checkout\CheckoutLanding;
 use PHPUnit\Framework\TestCase;
 
 class CheckoutEntryServiceTest extends TestCase
 {
-    public function testCreatesACartAddsTheDefaultCombinationAndOpensTheCartByDefault()
+    public function testPrevalidatesEveryLineThenRaisesCartQuantitiesToTheSignedTargets()
     {
-        $gateway = new CheckoutEntryServiceGateway();
-        $gateway->combinationId = 24;
-        $gateway->quantity = 2;
+        $gateway = new CartGatewayFake();
         $gateway->cart = (object) array('id' => 71);
+        $gateway->quantities = array('119:24' => 1, '120:0' => 3);
+        $items = array(
+            array('externalProductId' => 119, 'externalVariantId' => 24, 'quantity' => 3),
+            array('externalProductId' => 120, 'quantity' => 2),
+        );
 
-        $landingUrl = (new CheckoutEntryService($gateway))->enter(119);
-
-        self::assertSame('https://shop.example/cart?action=show', $landingUrl);
-        self::assertSame(array(119, 24, 2), $gateway->addedProduct);
-        self::assertSame($gateway->cart, $gateway->persistedCart);
-        self::assertSame(1, $gateway->cartRequests);
-        self::assertSame(CheckoutLanding::CART, $gateway->requestedLanding);
+        self::assertSame(
+            'https://shop.example/cart?action=show',
+            (new CheckoutEntryService($gateway))->enter($items)
+        );
+        self::assertSame($items, $gateway->validated);
+        self::assertSame(array(array(119, 24, 2)), $gateway->increases);
+        self::assertSame($gateway->cart, $gateway->persisted);
     }
 
-    public function testCanContinueDirectlyToCheckout()
+    public function testDoesNotMutateTheCartWhenAnyLineFailsPrevalidation()
     {
-        $gateway = new CheckoutEntryServiceGateway();
-        $gateway->cart = (object) array('id' => 71);
+        $gateway = new CartGatewayFake();
+        $gateway->invalidProductId = 120;
 
-        $url = (new CheckoutEntryService($gateway))->enter(119, CheckoutLanding::CHECKOUT);
-
-        self::assertSame('https://shop.example/order', $url);
-        self::assertSame(CheckoutLanding::CHECKOUT, $gateway->requestedLanding);
-    }
-
-    public function testReusesTheCurrentCartWithoutChangingUnrelatedLines()
-    {
-        $gateway = new CheckoutEntryServiceGateway();
-        $gateway->cart = (object) array('id' => 71, 'unrelatedLineCount' => 3);
-
-        self::assertSame('https://shop.example/cart?action=show', (new CheckoutEntryService($gateway))->enter(119));
-        self::assertSame(array(119, 0, 1), $gateway->addedProduct);
-        self::assertSame(3, $gateway->cart->unrelatedLineCount);
-        self::assertSame(1, $gateway->cartRequests);
-    }
-
-    public function testDoesNotAddOrIncreaseAnExistingSignedProductLine()
-    {
-        $gateway = new CheckoutEntryServiceGateway();
-        $gateway->cart = (object) array('id' => 71);
-        $gateway->hasProductLine = true;
-
-        self::assertSame('https://shop.example/cart?action=show', (new CheckoutEntryService($gateway))->enter(119));
-        self::assertNull($gateway->addedProduct);
-        self::assertSame($gateway->cart, $gateway->persistedCart);
-    }
-
-    public function testFailsClosedWhenAProductWithCombinationsHasNoShopDefault()
-    {
-        $gateway = new CheckoutEntryServiceGateway();
-        $gateway->combinationId = null;
-
-        self::assertNull((new CheckoutEntryService($gateway))->enter(119));
+        self::assertNull((new CheckoutEntryService($gateway))->enter(array(
+            array('externalProductId' => 119, 'quantity' => 1),
+            array('externalProductId' => 120, 'quantity' => 1),
+        )));
         self::assertSame(0, $gateway->cartRequests);
-        self::assertNull($gateway->addedProduct);
+        self::assertSame(array(), $gateway->increases);
     }
 
-    public function testFailsClosedWhenTheProductCannotBeAdded()
+    public function testInspectsEveryNativeLineBeforeTheFirstMutation()
     {
-        $gateway = new CheckoutEntryServiceGateway();
-        $gateway->isAddable = false;
-
-        self::assertNull((new CheckoutEntryService($gateway))->enter(119));
-        self::assertSame(0, $gateway->cartRequests);
-        self::assertNull($gateway->addedProduct);
-    }
-
-    public function testFailsClosedWhenNativeCartAdditionFails()
-    {
-        $gateway = new CheckoutEntryServiceGateway();
+        $gateway = new CartGatewayFake();
         $gateway->cart = (object) array('id' => 71);
-        $gateway->addSucceeds = false;
+        $gateway->quantities = array('119:0' => 0, '120:0' => null);
 
-        self::assertNull((new CheckoutEntryService($gateway))->enter(119));
-        self::assertSame(array(119, 0, 1), $gateway->addedProduct);
-        self::assertNull($gateway->persistedCart);
+        self::assertNull((new CheckoutEntryService($gateway))->enter(array(
+            array('externalProductId' => 119, 'quantity' => 1),
+            array('externalProductId' => 120, 'quantity' => 1),
+        )));
+        self::assertSame(array(), $gateway->increases);
+    }
+
+    public function testARepeatedSignedCartDoesNotDuplicateLines()
+    {
+        $gateway = new CartGatewayFake();
+        $gateway->cart = (object) array('id' => 71);
+        $gateway->quantities = array('119:0' => 2);
+
+        self::assertNotNull((new CheckoutEntryService($gateway))->enter(array(
+            array('externalProductId' => 119, 'quantity' => 2),
+        )));
+        self::assertSame(array(), $gateway->increases);
+    }
+
+    public function testLegacyProductUsesTheNativeMinimumAndStillLandsOnTheCart()
+    {
+        $gateway = new CartGatewayFake();
+        $gateway->cart = (object) array('id' => 71);
+        $gateway->legacyMinimum = 2;
+
+        self::assertSame(
+            'https://shop.example/cart?action=show',
+            (new CheckoutEntryService($gateway))->enter(array(array(
+                'externalProductId' => 119,
+                'quantity' => null,
+            )))
+        );
+        self::assertSame(array(array(119, 0, 2)), $gateway->increases);
+    }
+
+    public function testRollsBackEarlierLinesWhenALaterNativeUpdateFails()
+    {
+        $gateway = new CartGatewayFake();
+        $gateway->cart = (object) array('id' => 71);
+        $gateway->failedIncreaseProductId = 120;
+
+        self::assertNull((new CheckoutEntryService($gateway))->enter(array(
+            array('externalProductId' => 119, 'quantity' => 2),
+            array('externalProductId' => 120, 'quantity' => 1),
+        )));
+        self::assertSame(array(array(119, 0, 2)), $gateway->decreases);
+        self::assertNull($gateway->persisted);
     }
 }
 
-class CheckoutEntryServiceGateway implements CartCheckoutGatewayInterface
+class CartGatewayFake implements CartCheckoutGatewayInterface
 {
-    public $combinationId = 0;
-    public $quantity = 1;
-    public $isAddable = true;
     public $cart;
-    public $hasProductLine = false;
-    public $addSucceeds = true;
-    public $addedProduct;
-    public $persistedCart;
+    public $invalidProductId;
+    public $validated = array();
+    public $quantities = array();
+    public $increases = array();
+    public $decreases = array();
+    public $failedIncreaseProductId;
+    public $persisted;
     public $cartRequests = 0;
-    public $requestedLanding;
+    public $legacyMinimum = 1;
 
-    public function getDefaultCombinationId($productId)
+    public function resolveItem($productId, $combinationId, $quantity)
     {
-        return $this->combinationId;
-    }
+        $item = array('externalProductId' => $productId);
+        if ($combinationId !== null) {
+            $item['externalVariantId'] = $combinationId;
+        }
+        $item['quantity'] = $quantity;
+        $this->validated[] = $item;
+        if ($productId === $this->invalidProductId) {
+            return null;
+        }
 
-    public function getRequiredQuantity($productId, $combinationId)
-    {
-        return $this->quantity;
-    }
-
-    public function isProductAddable($productId, $combinationId, $quantity)
-    {
-        return $this->isAddable;
+        return array(
+            'productId' => $productId,
+            'combinationId' => $combinationId === null ? 0 : $combinationId,
+            'quantity' => $quantity === null ? $this->legacyMinimum : $quantity,
+        );
     }
 
     public function getOrCreateCart()
@@ -125,31 +135,39 @@ class CheckoutEntryServiceGateway implements CartCheckoutGatewayInterface
         return $this->cart;
     }
 
-    public function hasProductLine($cart, $productId, $combinationId)
+    public function getLineQuantity($cart, $productId, $combinationId)
     {
-        return $this->hasProductLine;
+        $key = $productId . ':' . $combinationId;
+
+        return array_key_exists($key, $this->quantities) ? $this->quantities[$key] : 0;
     }
 
-    public function addProduct($cart, $productId, $combinationId, $quantity)
+    public function increaseProductQuantity($cart, $productId, $combinationId, $quantity)
     {
-        $this->addedProduct = array($productId, $combinationId, $quantity);
-
-        return $this->addSucceeds;
-    }
-
-    public function persistCart($cart)
-    {
-        $this->persistedCart = $cart;
+        if ($productId === $this->failedIncreaseProductId) {
+            return false;
+        }
+        $this->increases[] = array($productId, $combinationId, $quantity);
 
         return true;
     }
 
-    public function getLandingUrl($landing)
+    public function decreaseProductQuantity($cart, $productId, $combinationId, $quantity)
     {
-        $this->requestedLanding = $landing;
+        $this->decreases[] = array($productId, $combinationId, $quantity);
 
-        return $landing === CheckoutLanding::CHECKOUT
-            ? 'https://shop.example/order'
-            : 'https://shop.example/cart?action=show';
+        return true;
+    }
+
+    public function persistCart($cart)
+    {
+        $this->persisted = $cart;
+
+        return true;
+    }
+
+    public function getCartUrl()
+    {
+        return 'https://shop.example/cart?action=show';
     }
 }

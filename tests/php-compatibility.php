@@ -23,6 +23,10 @@ if (strpos($module, 'requires PHP 7.0 or newer.') === false) {
     $failures[] = 'The installer error must state the PHP 7.0 requirement.';
 }
 
+if (strpos($module, "version_compare(PHP_VERSION, '8.2', '>=')") === false) {
+    $failures[] = 'The installer must enforce the advertised PHP 8.1 upper bound.';
+}
+
 if (strpos($readme, '| PHP | 7.0 through 8.1 |') === false) {
     $failures[] = 'The README must document PHP 7.0 through 8.1 support.';
 }

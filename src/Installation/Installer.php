@@ -231,6 +231,14 @@ class Installer
         return (bool) $this->db->execute($this->buyNonceTableSql());
     }
 
+    public function upgradeToVersion070()
+    {
+        return (bool) $this->db->execute(
+            'UPDATE `' . _DB_PREFIX_ . 'bemoliveshopping_configuration`'
+            . " SET `checkout_landing` = 'cart' WHERE `checkout_landing` <> 'cart'"
+        );
+    }
+
     public function uninstall()
     {
         $nonceRemoved = (bool) $this->db->execute(

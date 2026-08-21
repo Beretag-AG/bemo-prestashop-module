@@ -45,23 +45,40 @@ or optional-capability work. They do not block this module foundation.
   every affected creator connection to pair again.
 - Webhook handlers enqueue a stable event ID and return; network delivery is
   drained outside the merchant request.
-- Webhook delivery is at-least-once and BEMO ingestion is idempotent.
+- When a host runs the notification retry endpoint, webhook delivery is
+  at-least-once and BEMO ingestion is idempotent. BEMO's recurring catalog read
+  remains the correctness path when no local delivery runner is configured.
 - Link-out checkout is the baseline purchase mode. Embedding is optional: the
   module requests it, then a BEMO admin records approval after separate browser
   and merchant acceptance tests.
 
-## Signed purchase-link limits
+## Signed cart contract
 
-The current signed purchase-link payload contains exactly `connectionId`,
-`expiresAt`, `externalProductId`, `issuedAt`, `nonce`, `productId`, and
-`sessionId`. It does not authorize a variant, voucher, quantity, cart,
-customer, or redirect target. The PrestaShop module adds the signed product at
-the shop's native minimum quantity, uses only that shop's configured default
-combination when one is required. It does not apply vouchers. The shop's module
-setting selects whether the controller lands on the native cart (the default)
-or continues directly to checkout; this preference is not part of the signed
-authorization. A signed variant or voucher flow requires a separately versioned
-contract before it can be implemented.
+Version 2 contains exactly `version`, `cartId`, `connectionId`, `sessionId`,
+`issuedAt`, `expiresAt`, `nonce`, and `items`. Each item contains exactly
+`externalProductId`, optional `externalVariantId`, and `quantity`. A token holds
+one to 25 unique lines, each quantity is 1 through 99, its lifetime is at most
+15 minutes, and its nonce can be accepted only once per shop.
+
+The module validates every line before it mutates the native cart. PrestaShop
+remains authoritative for product activity, shop association, combination
+ownership, minimum quantity, and available stock. Applying the desired cart is
+idempotent: each matching native line is increased only until it reaches the
+signed quantity. Existing larger quantities and unrelated lines remain intact.
+The controller always opens the native cart and never applies vouchers or a
+signed redirect target.
+
+For embedded checkout, the signed route also issues a short-lived same-shop
+marker. Once the resulting native cart page finishes loading, the module posts
+exactly `{source: "bemo-prestashop", type: "checkout.ready", version: 1}` to
+the configured BEMO app origin. BEMO accepts the message only from the iframe
+window and the signed shop URL's exact origin; all other messages are ignored.
+
+During the 0.7.0 rollout, the verifier also accepts the previous strict
+single-product contract. Legacy links use the product's native default
+combination and minimum quantity, keep the same TTL and single-use nonce rules,
+and also land on the native cart. BEMO must issue only version 2 after its
+cart-based flow is deployed.
 
 ## Pairing request
 
@@ -112,13 +129,20 @@ credentials or creator identity.
 BEMO owns the recurring catalog schedule. It reads a connected shop every 15
 minutes in steady state and every minute while its creator has a live or
 preparing session. The module's product, price, stock, and voucher hooks add an
-immediate signed notification to a durable local queue and try to deliver it
-after the merchant request finishes. BEMO's recurring read is the correctness
-backstop when that notification cannot be delivered.
+signed notification to a durable local queue. Delivery runs only through the
+private retry endpoint or a scheduler hook, never during a storefront or Back
+Office request. BEMO's recurring read is the correctness backstop when that
+notification has not been delivered.
 
 The module does not depend on PrestaShop's Cron tasks manager. Its private
 token-authenticated retry URL remains available for a host that wants an
 additional local retry schedule.
+
+An authenticated product-link response also returns the current embedded
+checkout request and module version, even for an empty product list. BEMO uses
+that value as the reconciliation backstop. A `configuration.updated` event in
+the durable outbox is the optional fast path. It uses the normal event envelope
+with `resourceType` set to `configuration` and `resourceId` set to the shop ID.
 
 The committed contract suite includes JSON fixtures for pairing, every webhook
 event, an exact-byte webhook HMAC vector, and a golden signed buy-link token.
@@ -158,6 +182,7 @@ Only `GET` and `HEAD` are provisioned for:
 - `products`
 - `categories`
 - `combinations`
+- `product_option_values`
 - `stock_availables`
 - `specific_prices`
 - `cart_rules`
@@ -172,6 +197,6 @@ Only `GET` and `HEAD` are provisioned for:
 intent instead of pretending pushed order events form a reconciled revenue
 ledger.
 
-Module version 0.5.0 repairs the permissions of an already-provisioned key
+Module versions 0.5.0 and 0.7.0 repair the permissions of an already-provisioned key
 during upgrade without rotating it, so an existing BEMO connection keeps
 working.

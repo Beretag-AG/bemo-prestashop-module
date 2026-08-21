@@ -9,77 +9,84 @@ if (!defined('_PS_VERSION_')) {
 class PrestaShopCartCheckoutGateway implements CartCheckoutGatewayInterface
 {
     private $context;
-    private $product;
+    private $shopId;
+    private $languageId;
 
-    public function __construct($context, $product)
+    public function __construct($context, $shopId, $languageId)
     {
         $this->context = $context;
-        $this->product = $product;
+        $this->shopId = (int) $shopId;
+        $this->languageId = (int) $languageId;
     }
 
-    public function getDefaultCombinationId($productId)
+    public function resolveItem($productId, $combinationId, $quantity)
     {
-        if ((int) $productId !== (int) $this->product->id) {
+        $productId = (int) $productId;
+        $quantity = $quantity === null ? null : (int) $quantity;
+        $product = new \Product($productId, false, $this->languageId, $this->shopId);
+        if (!\Validate::isLoadedObject($product)
+            || !(bool) $product->active
+            || !(bool) $product->available_for_order
+            || !$product->isAssociatedToShop($this->shopId)
+            || \Configuration::isCatalogMode()
+            || ((bool) $product->customizable && !$product->hasAllRequiredCustomizableFields())) {
             return null;
         }
 
-        if (!(int) $this->product->hasAttributes()) {
-            return 0;
-        }
-
-        $combinationId = (int) $this->product->getDefaultIdProductAttribute();
-        if ($combinationId <= 0) {
-            return null;
-        }
-
-        $combination = new \Combination($combinationId);
-        if (!\Validate::isLoadedObject($combination)
-            || (int) $combination->id_product !== (int) $productId) {
-            return null;
-        }
-
-        return $combinationId;
-    }
-
-    public function getRequiredQuantity($productId, $combinationId)
-    {
-        if ((int) $productId !== (int) $this->product->id) {
-            return 0;
-        }
-
-        if ((int) $combinationId > 0) {
-            if (class_exists('ProductAttribute')
-                && method_exists('ProductAttribute', 'getAttributeMinimalQty')) {
-                $quantity = (int) \ProductAttribute::getAttributeMinimalQty((int) $combinationId);
-            } elseif (class_exists('Attribute') && method_exists('Attribute', 'getAttributeMinimalQty')) {
-                $quantity = (int) \Attribute::getAttributeMinimalQty((int) $combinationId);
-            } else {
-                return 0;
+        if ((int) $product->hasAttributes()) {
+            if ($combinationId === null) {
+                $combinationId = (int) $product->getDefaultIdProductAttribute();
+                if ($combinationId <= 0) {
+                    return null;
+                }
             }
+            $combination = new \Combination((int) $combinationId);
+            if (!\Validate::isLoadedObject($combination)
+                || (int) $combination->id_product !== $productId) {
+                return null;
+            }
+            $combinationId = (int) $combinationId;
+            $minimum = $this->combinationMinimum($combinationId);
         } else {
-            $quantity = (int) $this->product->minimal_quantity;
+            if ($combinationId !== null) {
+                return null;
+            }
+            $combinationId = 0;
+            $minimum = max(1, (int) $product->minimal_quantity);
         }
 
-        return $quantity > 0 ? $quantity : 1;
+        if ($minimum === null) {
+            return null;
+        }
+        if ($quantity === null) {
+            $quantity = $minimum;
+        }
+        if ($quantity < $minimum) {
+            return null;
+        }
+        $product->id_product_attribute = $combinationId;
+        if (!$product->checkQty($quantity)) {
+            return null;
+        }
+
+        return array(
+            'productId' => $productId,
+            'combinationId' => $combinationId,
+            'quantity' => $quantity,
+        );
     }
 
-    public function isProductAddable($productId, $combinationId, $quantity)
+    private function combinationMinimum($combinationId)
     {
-        if ((int) $productId !== (int) $this->product->id
-            || !(bool) $this->product->active
-            || !(bool) $this->product->available_for_order
-            || \Configuration::isCatalogMode()) {
-            return false;
+        if (class_exists('ProductAttribute')
+            && method_exists('ProductAttribute', 'getAttributeMinimalQty')) {
+            return max(1, (int) \ProductAttribute::getAttributeMinimalQty($combinationId));
+        }
+        if (class_exists('Attribute') && method_exists('Attribute', 'getAttributeMinimalQty')) {
+            return max(1, (int) \Attribute::getAttributeMinimalQty($combinationId));
         }
 
-        if ((bool) $this->product->customizable
-            && !$this->product->hasAllRequiredCustomizableFields()) {
-            return false;
-        }
-
-        $this->product->id_product_attribute = (int) $combinationId;
-
-        return (bool) $this->product->checkQty((int) $quantity);
+        return null;
     }
 
     public function getOrCreateCart()
@@ -87,11 +94,9 @@ class PrestaShopCartCheckoutGateway implements CartCheckoutGatewayInterface
         if (!isset($this->context->cart) || !is_object($this->context->cart)) {
             return null;
         }
-
         $cart = $this->context->cart;
         if ((int) $cart->id) {
-            if (!\Validate::isLoadedObject($cart)
-                || (int) $cart->id_shop !== (int) $this->context->shop->id) {
+            if (!\Validate::isLoadedObject($cart) || (int) $cart->id_shop !== $this->shopId) {
                 return null;
             }
 
@@ -105,33 +110,28 @@ class PrestaShopCartCheckoutGateway implements CartCheckoutGatewayInterface
             }
         }
 
-        if (!$cart->add() || !\Validate::isLoadedObject($cart)) {
-            return null;
-        }
-
-        return $cart;
+        return $cart->add() && \Validate::isLoadedObject($cart) ? $cart : null;
     }
 
-    public function hasProductLine($cart, $productId, $combinationId)
+    public function getLineQuantity($cart, $productId, $combinationId)
     {
         $products = $cart->getProducts(true);
         if (!is_array($products)) {
             return null;
         }
-
         foreach ($products as $product) {
             if ((int) $product['id_product'] === (int) $productId
-                && (int) $product['id_product_attribute'] === (int) $combinationId
-                && isset($product['cart_quantity'])
-                && (int) $product['cart_quantity'] > 0) {
-                return true;
+                && (int) $product['id_product_attribute'] === (int) $combinationId) {
+                return isset($product['cart_quantity']) && (int) $product['cart_quantity'] >= 0
+                    ? (int) $product['cart_quantity']
+                    : null;
             }
         }
 
-        return false;
+        return 0;
     }
 
-    public function addProduct($cart, $productId, $combinationId, $quantity)
+    public function increaseProductQuantity($cart, $productId, $combinationId, $quantity)
     {
         return true === $cart->updateQty(
             (int) $quantity,
@@ -142,6 +142,28 @@ class PrestaShopCartCheckoutGateway implements CartCheckoutGatewayInterface
         );
     }
 
+    public function decreaseProductQuantity($cart, $productId, $combinationId, $quantity)
+    {
+        $current = $this->getLineQuantity($cart, $productId, $combinationId);
+        if (!is_int($current) || $current <= 0) {
+            return false;
+        }
+        if ($current <= (int) $quantity) {
+            return true === $cart->deleteProduct(
+                (int) $productId,
+                (int) $combinationId
+            );
+        }
+
+        return true === $cart->updateQty(
+            (int) $quantity,
+            (int) $productId,
+            (int) $combinationId,
+            false,
+            'down'
+        );
+    }
+
     public function persistCart($cart)
     {
         if (!\Validate::isLoadedObject($cart)
@@ -149,24 +171,19 @@ class PrestaShopCartCheckoutGateway implements CartCheckoutGatewayInterface
             || !is_object($this->context->cookie)) {
             return false;
         }
-
         $this->context->cart = $cart;
         $this->context->cookie->id_cart = (int) $cart->id;
 
         return true;
     }
 
-    public function getLandingUrl($landing)
+    public function getCartUrl()
     {
-        if ($landing === CheckoutLanding::CART) {
-            return $this->context->link->getPageLink(
-                'cart',
-                true,
-                null,
-                array('action' => 'show')
-            );
-        }
-
-        return $this->context->link->getPageLink('order', true);
+        return $this->context->link->getPageLink(
+            'cart',
+            true,
+            null,
+            array('action' => 'show')
+        );
     }
 }

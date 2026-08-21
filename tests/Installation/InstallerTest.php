@@ -50,6 +50,14 @@ class InstallerTest extends TestCase
         self::assertStringContainsString('CREATE TABLE IF NOT EXISTS', $db->executed[0]);
     }
 
+    public function testVersionSevenMigratesEveryShopToTheNativeCartLanding()
+    {
+        $db = new InstallerDb();
+
+        self::assertTrue((new Installer($db))->upgradeToVersion070());
+        self::assertStringContainsString("SET `checkout_landing` = 'cart'", $db->executed[0]);
+    }
+
     public function testUninstallRemovesEveryModuleTable()
     {
         $db = new InstallerDb();

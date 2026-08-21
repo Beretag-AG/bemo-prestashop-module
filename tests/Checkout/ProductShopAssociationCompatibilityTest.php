@@ -15,13 +15,13 @@ class ProductShopAssociationCompatibilityTest extends TestCase
 
         self::assertNotFalse($source);
         self::assertStringNotContainsString('Product::isAssociatedToShop', $source);
-        self::assertStringContainsString('$product->isAssociatedToShop($shopId)', $source);
+        self::assertStringContainsString('$product->isAssociatedToShop(', $source);
     }
 
     public function productControllerProvider()
     {
         return array(
-            'signed checkout' => array('controllers/front/buy.php'),
+            'signed checkout' => array('src/Checkout/PrestaShopCartCheckoutGateway.php'),
             'canonical product links' => array('controllers/front/productlinks.php'),
         );
     }

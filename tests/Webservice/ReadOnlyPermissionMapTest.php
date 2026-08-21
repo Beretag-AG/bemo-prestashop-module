@@ -32,6 +32,7 @@ class ReadOnlyPermissionMapTest extends TestCase
             'currencies',
             'images',
             'languages',
+            'product_option_values',
             'products',
             'shops',
             'specific_prices',

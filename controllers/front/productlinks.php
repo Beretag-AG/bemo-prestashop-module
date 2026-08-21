@@ -5,6 +5,7 @@ if (!defined('_PS_VERSION_')) {
 }
 
 use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
+use Bemo\LiveShopping\Checkout\ProductLinksResponse;
 
 class BemoliveshoppingProductlinksModuleFrontController extends ModuleFrontController
 {
@@ -16,8 +17,8 @@ class BemoliveshoppingProductlinksModuleFrontController extends ModuleFrontContr
         header('Referrer-Policy: no-referrer');
 
         $shopId = isset($this->context->shop->id) ? (int) $this->context->shop->id : 0;
-        $credentials = (new DbConfigurationRepository(Db::getInstance()))
-            ->getPairingCredentials($shopId);
+        $configuration = new DbConfigurationRepository(Db::getInstance());
+        $credentials = $configuration->getPairingCredentials($shopId);
         $providedKey = $this->basicAuthenticationUser();
         if (!is_array($credentials)
             || !isset($credentials['webservice_key'])
@@ -47,7 +48,11 @@ class BemoliveshoppingProductlinksModuleFrontController extends ModuleFrontContr
             );
         }
 
-        $this->respond(200, array('products' => $products));
+        $this->respond(200, (new ProductLinksResponse())->compose(
+            $products,
+            $configuration->isEmbeddedCheckoutRequested($shopId),
+            Bemoliveshopping::VERSION
+        ));
     }
 
     /**

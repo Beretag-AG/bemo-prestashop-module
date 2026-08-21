@@ -16,28 +16,19 @@ class CheckoutEntryService
         $this->gateway = $gateway;
     }
 
-    /**
-     * @return string|null A native cart or checkout URL, or null when entry is unsafe.
-     */
-    public function enter($productId, $landing = CheckoutLanding::CART)
+    public function enter(array $items)
     {
-        $productId = (int) $productId;
-        if ($productId <= 0) {
-            return null;
-        }
-
-        $combinationId = $this->gateway->getDefaultCombinationId($productId);
-        if (!is_int($combinationId) || $combinationId < 0) {
-            return null;
-        }
-
-        $quantity = $this->gateway->getRequiredQuantity($productId, $combinationId);
-        if (!is_int($quantity) || $quantity <= 0) {
-            return null;
-        }
-
-        if (!$this->gateway->isProductAddable($productId, $combinationId, $quantity)) {
-            return null;
+        $resolved = array();
+        foreach ($items as $item) {
+            $line = $this->gateway->resolveItem(
+                $item['externalProductId'],
+                isset($item['externalVariantId']) ? $item['externalVariantId'] : null,
+                $item['quantity']
+            );
+            if (!is_array($line)) {
+                return null;
+            }
+            $resolved[] = $line;
         }
 
         $cart = $this->gateway->getOrCreateCart();
@@ -45,22 +36,61 @@ class CheckoutEntryService
             return null;
         }
 
-        $hasProductLine = $this->gateway->hasProductLine($cart, $productId, $combinationId);
-        if (!is_bool($hasProductLine)) {
-            return null;
+        $increases = array();
+        foreach ($resolved as $line) {
+            $current = $this->gateway->getLineQuantity(
+                $cart,
+                $line['productId'],
+                $line['combinationId']
+            );
+            if (!is_int($current) || $current < 0) {
+                return null;
+            }
+            if ($current < $line['quantity']) {
+                $increases[] = array(
+                    'productId' => $line['productId'],
+                    'combinationId' => $line['combinationId'],
+                    'quantity' => $line['quantity'] - $current,
+                );
+            }
         }
 
-        if (!$hasProductLine
-            && !$this->gateway->addProduct($cart, $productId, $combinationId, $quantity)) {
-            return null;
+        // PrestaShop exposes only per-line cart updates. Inspecting every line
+        // first avoids deterministic partial writes; if a later native update
+        // still fails, the preceding increases are compensated in reverse.
+        $applied = array();
+        foreach ($increases as $increase) {
+            if (!$this->gateway->increaseProductQuantity(
+                $cart,
+                $increase['productId'],
+                $increase['combinationId'],
+                $increase['quantity']
+            )) {
+                $this->rollBackIncreases($cart, $applied);
+
+                return null;
+            }
+            $applied[] = $increase;
         }
 
         if (!$this->gateway->persistCart($cart)) {
             return null;
         }
 
-        $landingUrl = $this->gateway->getLandingUrl(CheckoutLanding::normalize($landing));
+        $url = $this->gateway->getCartUrl();
 
-        return is_string($landingUrl) && $landingUrl !== '' ? $landingUrl : null;
+        return is_string($url) && $url !== '' ? $url : null;
+    }
+
+    private function rollBackIncreases($cart, array $applied)
+    {
+        foreach (array_reverse($applied) as $increase) {
+            $this->gateway->decreaseProductQuantity(
+                $cart,
+                $increase['productId'],
+                $increase['combinationId'],
+                $increase['quantity']
+            );
+        }
     }
 }

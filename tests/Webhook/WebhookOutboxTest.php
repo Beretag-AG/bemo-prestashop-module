@@ -16,6 +16,29 @@ use PHPUnit\Framework\TestCase;
 
 class WebhookOutboxTest extends TestCase
 {
+    public function testConfigurationChangeUsesTheAuthenticatedEnvelope()
+    {
+        $outbox = new WebhookOutboxRepositoryFake();
+        $service = $this->service(new WebhookConfigurationFake(), $outbox, new WebhookGatewayFake(), 1700000000);
+
+        self::assertTrue($service->enqueueConfiguration(7, true, '0.7.0'));
+        $payload = json_decode($outbox->rows[0]['payload'], true);
+        self::assertSame(array(
+            'eventId' => $outbox->rows[0]['event_id'],
+            'hook' => 'configuration.updated',
+            'occurredAt' => 1700000000000,
+            'resourceId' => 7,
+            'resourceType' => 'configuration',
+            'shopId' => 7,
+            'shopUrl' => 'https://shop.example',
+            'configuration' => array(
+                'embeddedCheckoutRequested' => true,
+                'moduleVersion' => '0.7.0',
+            ),
+        ), $payload);
+        self::assertSame('configuration:configuration.updated', $outbox->rows[0]['resource_key']);
+    }
+
     public function testEnqueuePersistsAStableRawEnvelopeWithoutCallingTheNetwork()
     {
         $configuration = new WebhookConfigurationFake();

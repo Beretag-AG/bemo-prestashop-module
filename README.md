@@ -22,9 +22,9 @@ merchant's own storefront.
 | Catalog sync | Managed by BEMO; no PrestaShop cron module is required |
 
 BEMO checks connected shops from its own servers every 15 minutes, and every
-minute while a creator is live or preparing a session. The module also sends an
-immediate notification after catalog changes. A private retry URL remains
-available for hosts that want an additional local schedule.
+minute while a creator is live or preparing a session. The module also queues
+catalog-change notifications. A private retry URL lets the host deliver them
+without making outbound calls during storefront or Back Office requests.
 
 PrestaShop 1.7.3 installations running PHP 5.4–5.6 must upgrade PHP before
 installing this module. PrestaShop 9 is not supported by the current release.
@@ -42,12 +42,11 @@ installing this module. PrestaShop 9 is not supported by the current release.
   signed purchase links.
 - Starts a short-lived BEMO pairing handoff and redirects the administrator to
   the configured BEMO application without rendering or logging credentials.
-- Queues catalog-change events durably and delivers exact-byte HMAC-signed
-  webhooks outside merchant requests, with idempotent ingestion and retry.
-- Sends queued catalog notifications after the merchant request finishes and
-  exposes a token-authenticated retry URL as an optional fallback.
+- Queues catalog-change events durably. A token-authenticated retry URL sends
+  exact-byte HMAC-signed notifications outside storefront and Back Office
+  requests; BEMO handles repeated deliveries idempotently.
 - Validates short-lived signed purchase links, accepts each one only once, and
-  resolves their product only inside the currently selected shop.
+  validates every requested cart line inside the currently selected shop.
 - Revokes the read-only Webservice key and clears stored credentials when the
   merchant turns catalog access off or disconnects the shop.
 - Removes only module-owned Webservice accounts during uninstall, including in
@@ -80,11 +79,10 @@ To install it in a development or staging shop:
 
 1. Open **Modules → Module Manager** in PrestaShop Back Office.
 2. Select **Upload a module**.
-3. Upload `bemoliveshopping-<version>.zip`.
+3. Upload the production or `-staging` ZIP selected above.
 4. Open **BEMO Live Shopping → Configure**.
-5. Review the setup choices: read-only catalog access, whether viewers may buy
-   without leaving the show, and whether a product click opens the cart or
-   continues directly to checkout.
+5. Review the setup choices: read-only catalog access and whether viewers may
+   buy without leaving the show. Signed BEMO carts always open the native cart.
 6. Click **Save and connect to BEMO**, then claim the shop from the BEMO
    account that should sell its products. Until it is claimed, the page offers
    **Restart connection** to request a fresh claim link.
@@ -96,8 +94,7 @@ it has. Production and staging archives lock their BEMO endpoints and hide them.
 Arbitrary endpoints are editable only when PrestaShop developer mode is enabled.
 
 No local scheduler is required. BEMO reads the connected shop on its own
-schedule, and the module sends immediate catalog notifications after merchant
-requests finish. Hosts may optionally call the private retry address shown in
+schedule. Hosts may optionally call the private retry address shown in
 the **Catalog sync** panel every five minutes:
 
 ```cron
@@ -115,7 +112,7 @@ clears the stored credentials for the current shop.
 
 BEMO can keep the PrestaShop cart and checkout inside the live session, but the
 shop must explicitly request a cross-site iframe and pass BEMO's staging review.
-Otherwise the shop's configured cart or checkout landing opens in a new tab.
+Otherwise the shop's native cart opens in a new tab.
 
 Before pairing a shop for embedded checkout:
 
@@ -155,7 +152,7 @@ process or store those details in this flow.
 Ask the merchant or hosting provider to complete these steps on a staging copy
 before BEMO enables embedded checkout on the live shop:
 
-1. Install or upgrade **BEMO Live Shopping 0.6.5 or newer**. Use the archive
+1. Install or upgrade **BEMO Live Shopping 0.7.0 or newer**. Use the archive
    whose filename matches the BEMO environment. No PrestaShop cron module is
    required.
 2. Enable HTTPS for the entire storefront, including cart, checkout, payment,

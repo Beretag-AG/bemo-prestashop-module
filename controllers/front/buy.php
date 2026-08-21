@@ -6,6 +6,7 @@ if (!defined('_PS_VERSION_')) {
 
 use Bemo\LiveShopping\Checkout\BuyLinkVerifier;
 use Bemo\LiveShopping\Checkout\CheckoutEntryService;
+use Bemo\LiveShopping\Checkout\CheckoutReadyBridge;
 use Bemo\LiveShopping\Checkout\DbBuyLinkNonceRepository;
 use Bemo\LiveShopping\Checkout\PrestaShopCartCheckoutGateway;
 use Bemo\LiveShopping\Checkout\SingleUseBuyLinkVerifier;
@@ -40,20 +41,27 @@ class BemoliveshoppingBuyModuleFrontController extends ModuleFrontController
             $this->redirectToNotFound();
         }
 
-        $productId = (int) $payload['externalProductId'];
-        $product = new Product($productId, false, (int) $this->context->language->id, $shopId);
-        if (!Validate::isLoadedObject($product)
-            || !(bool) $product->active
-            || !$product->isAssociatedToShop($shopId)) {
-            $this->redirectToNotFound();
-        }
-
+        $items = isset($payload['version'])
+            ? $payload['items']
+            : array(array(
+                'externalProductId' => $payload['externalProductId'],
+                'quantity' => null,
+            ));
         $landingUrl = (new CheckoutEntryService(
-            new PrestaShopCartCheckoutGateway($this->context, $product)
-        ))->enter($productId, $configuration->getCheckoutLanding($shopId));
+            new PrestaShopCartCheckoutGateway(
+                $this->context,
+                $shopId,
+                (int) $this->context->language->id
+            )
+        ))->enter($items);
         if ($landingUrl === null) {
             $this->redirectToNotFound();
         }
+
+        $bridge = new CheckoutReadyBridge();
+        $marker = $bridge->issueMarker(time());
+        $this->context->cookie->{CheckoutReadyBridge::COOKIE_NAME} = $marker['cookieValue'];
+        $landingUrl = $bridge->cartUrl($landingUrl, $marker['token']);
 
         Tools::redirect($landingUrl);
     }
