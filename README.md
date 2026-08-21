@@ -19,12 +19,12 @@ merchant's own storefront.
 | --- | --- |
 | PrestaShop | 1.7.3.1 through 8.x |
 | PHP | 7.0 through 8.1 |
-| Scheduler | PrestaShop Cron tasks manager (`cronjobs`) **or** any scheduler that can call a URL |
+| Catalog sync | Managed by BEMO; no PrestaShop cron module is required |
 
-BEMO installs or enables **Cron tasks manager** automatically when its package
-is already available in the shop. If the package is absent or cannot be
-enabled, BEMO still installs and shows exact manual scheduler instructions on
-its configuration page.
+BEMO checks connected shops from its own servers every 15 minutes, and every
+minute while a creator is live or preparing a session. The module also sends an
+immediate notification after catalog changes. A private retry URL remains
+available for hosts that want an additional local schedule.
 
 PrestaShop 1.7.3 installations running PHP 5.4–5.6 must upgrade PHP before
 installing this module. PrestaShop 9 is not supported by the current release.
@@ -44,8 +44,8 @@ installing this module. PrestaShop 9 is not supported by the current release.
   the configured BEMO application without rendering or logging credentials.
 - Queues catalog-change events durably and delivers exact-byte HMAC-signed
   webhooks outside merchant requests, with idempotent ingestion and retry.
-- Drains the queue from the Cron tasks manager module or from a
-  token-authenticated URL, so a stock PrestaShop install needs no extra module.
+- Sends queued catalog notifications after the merchant request finishes and
+  exposes a token-authenticated retry URL as an optional fallback.
 - Validates short-lived signed purchase links, accepts each one only once, and
   resolves their product only inside the currently selected shop.
 - Revokes the read-only Webservice key and clears stored credentials when the
@@ -56,16 +56,25 @@ installing this module. PrestaShop 9 is not supported by the current release.
 
 ## Installation
 
-There is no general-availability release yet. To create a pilot build:
+Download the ZIP for the environment you are testing from the matching GitHub
+release:
+
+- `bemoliveshopping-<version>-staging.zip` connects only to
+  `https://beta.bemo.now` and its staging API. Send this file to pilot shops.
+- `bemoliveshopping-<version>.zip` connects only to production BEMO.
+
+To build the same files locally:
 
 ```bash
 git clone https://github.com/Beretag-AG/bemo-prestashop-module.git
 cd bemo-prestashop-module
 composer install
 composer package
+bash scripts/package.sh staging
 ```
 
-This creates `dist/bemoliveshopping-<version>.zip`.
+Never rename the staging archive to remove `-staging`; the filename is an
+intentional warning about which BEMO environment receives the shop credentials.
 
 To install it in a development or staging shop:
 
@@ -83,13 +92,13 @@ To install it in a development or staging shop:
 The configuration page follows the connection: a first-run welcome and the
 setup choices before connecting, a claim status while BEMO has not claimed the
 shop yet, and the connection, catalog sync, settings, and disconnect panels once
-it has. The BEMO endpoints are editable only when PrestaShop developer mode is
-enabled; otherwise the production endpoints are used and hidden.
+it has. Production and staging archives lock their BEMO endpoints and hide them.
+Arbitrary endpoints are editable only when PrestaShop developer mode is enabled.
 
-Queued catalog events need a scheduler. BEMO first tries to install or enable
-**Cron tasks manager**. If that is unavailable, call the sync address shown in
-the **Catalog sync** panel from the hosting platform's scheduler every five
-minutes:
+No local scheduler is required. BEMO reads the connected shop on its own
+schedule, and the module sends immediate catalog notifications after merchant
+requests finish. Hosts may optionally call the private retry address shown in
+the **Catalog sync** panel every five minutes:
 
 ```cron
 */5 * * * * curl -sS -o /dev/null 'https://shop.example/module/bemoliveshopping/cron?token=...'
@@ -146,8 +155,9 @@ process or store those details in this flow.
 Ask the merchant or hosting provider to complete these steps on a staging copy
 before BEMO enables embedded checkout on the live shop:
 
-1. Install or upgrade **BEMO Live Shopping 0.5.0 or newer** and schedule the
-   catalog sync, either with **Cron tasks manager** or with the sync address.
+1. Install or upgrade **BEMO Live Shopping 0.6.4 or newer**. Use the archive
+   whose filename matches the BEMO environment. No PrestaShop cron module is
+   required.
 2. Enable HTTPS for the entire storefront, including cart, checkout, payment,
    return, and confirmation pages.
 3. Set **Cookie SameSite** to **None** under **Advanced Parameters →
@@ -233,14 +243,15 @@ to replace existing local files.
 - Customer and order data are not exposed through the Webservice account.
 - Pairing, webhook, and purchase-link secrets are generated independently.
 - Pairing, webhook, and purchase-link secrets are never rendered back into Back
-  Office pages or written to logs. The event drain token is the one exception:
-  it is shown on the configuration page because a merchant has to paste it into
-  a scheduler, and it authorizes only queue delivery.
+  Office pages or written to logs. The notification retry token is the one
+  exception: it is shown on the configuration page for optional host-level
+  retries, and it authorizes only delivery of already-queued notifications.
 - Signed purchase links are accepted once per shop; a replayed link fails like
   any other invalid link.
-- Production credentials can be sent only to `https://actions.bemo.now` and
-  redirect only to `https://bemo.now`. Developer-mode overrides still require
-  HTTPS, except for explicit localhost URLs.
+- Production archives send credentials only to `https://actions.bemo.now` and
+  redirect only to `https://bemo.now`. Staging archives are locked to BEMO's
+  staging API and `https://beta.bemo.now`. Developer-mode overrides still
+  require HTTPS, except for explicit localhost URLs.
 - Uninstall never disables the shop-wide Webservice setting because another
   integration may depend on it.
 

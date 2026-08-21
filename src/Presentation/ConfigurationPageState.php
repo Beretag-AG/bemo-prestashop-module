@@ -45,7 +45,10 @@ class ConfigurationPageState
             return new self(self::STEP_WAITING, $developerMode);
         }
 
-        return new self(self::STEP_CONNECTED, $developerMode);
+        return new self(
+            $status === 'connected' ? self::STEP_CONNECTED : self::STEP_WELCOME,
+            $developerMode
+        );
     }
 
     public function step()
@@ -69,7 +72,7 @@ class ConfigurationPageState
     }
 
     /**
-     * Outside developer mode the endpoints are locked production constants, so
+     * Outside developer mode the endpoints are locked distribution constants, so
      * showing them only adds two fields the merchant cannot act on.
      */
     public function showsEndpointFields()

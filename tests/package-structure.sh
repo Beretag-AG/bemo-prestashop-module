@@ -16,6 +16,7 @@ for required in \
   bemoliveshopping/config.xml \
   bemoliveshopping/LICENSE.md \
   bemoliveshopping/config/autoload.php \
+  bemoliveshopping/config/distribution.php \
   bemoliveshopping/controllers/front/buy.php \
   bemoliveshopping/controllers/front/cron.php \
   bemoliveshopping/controllers/front/productlinks.php \
@@ -37,7 +38,9 @@ for required in \
   bemoliveshopping/upgrade/upgrade-0.3.4.php \
   bemoliveshopping/upgrade/upgrade-0.4.0.php \
   bemoliveshopping/upgrade/upgrade-0.5.0.php \
-  bemoliveshopping/upgrade/upgrade-0.6.0.php; do
+  bemoliveshopping/upgrade/upgrade-0.6.0.php \
+  bemoliveshopping/upgrade/upgrade-0.6.3.php \
+  bemoliveshopping/upgrade/upgrade-0.6.4.php; do
   if ! grep -Fx "$required" <<<"$entries" >/dev/null; then
     echo "Archive is missing $required." >&2
     exit 1
@@ -56,6 +59,12 @@ if ! unzip -p "$artifact" bemoliveshopping/bemoliveshopping.php \
   exit 1
 fi
 
+if ! unzip -p "$artifact" bemoliveshopping/config/distribution.php \
+  | grep -F "define('BEMO_DISTRIBUTION_ENVIRONMENT', 'production');" >/dev/null; then
+  echo "Production archive must be locked to BEMO production." >&2
+  exit 1
+fi
+
 for excluded in tests/ docs/ .github/; do
   if grep -F "$excluded" <<<"$entries" >/dev/null; then
     echo "Archive unexpectedly includes $excluded." >&2
@@ -69,5 +78,16 @@ while IFS= read -r php_entry; do
     exit 1
   fi
 done < <(grep -E '\.php$' <<<"$entries")
+
+staging_artifact="$($repository_root/scripts/package.sh staging)"
+if [[ "$staging_artifact" != "${artifact%.zip}-staging.zip" ]]; then
+  echo "Staging archive name must include the module version and environment." >&2
+  exit 1
+fi
+if ! unzip -p "$staging_artifact" bemoliveshopping/config/distribution.php \
+  | grep -F "define('BEMO_DISTRIBUTION_ENVIRONMENT', 'staging');" >/dev/null; then
+  echo "Staging archive must be locked to BEMO staging." >&2
+  exit 1
+fi
 
 echo "Package structure is valid: $artifact"

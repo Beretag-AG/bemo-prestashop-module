@@ -181,6 +181,8 @@ class PairingConfiguration implements ConfigurationRepositoryInterface
         return true;
     }
 
+    public function markPairingClaimed($shopId, $pairingToken) { return true; }
+
     public function clearPairingAttempt($shopId, $pairingToken)
     {
         ++$this->clearCalls;

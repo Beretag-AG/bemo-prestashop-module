@@ -100,6 +100,26 @@ after a successful claim. Ambiguous network and rate-limit failures reuse the
 same token and payload; BEMO returns the original expiry for that exact retry.
 Definitive rejection clears the local attempt before a fresh token is created.
 
+When the merchant reopens the module configuration page, the module posts the
+same token to `/prestashop/pairing/status`. BEMO returns only `pending`,
+`claimed`, or `expired`. A `claimed` response moves the local shop to
+`connected` and deletes the raw token; an `expired` response returns the shop
+to setup. The status response uses `Cache-Control: no-store` and never contains
+credentials or creator identity.
+
+## Catalog sync ownership
+
+BEMO owns the recurring catalog schedule. It reads a connected shop every 15
+minutes in steady state and every minute while its creator has a live or
+preparing session. The module's product, price, stock, and voucher hooks add an
+immediate signed notification to a durable local queue and try to deliver it
+after the merchant request finishes. BEMO's recurring read is the correctness
+backstop when that notification cannot be delivered.
+
+The module does not depend on PrestaShop's Cron tasks manager. Its private
+token-authenticated retry URL remains available for a host that wants an
+additional local retry schedule.
+
 The committed contract suite includes JSON fixtures for pairing, every webhook
 event, an exact-byte webhook HMAC vector, and a golden signed buy-link token.
 The BEMO and module repositories each consume matching copies so either side

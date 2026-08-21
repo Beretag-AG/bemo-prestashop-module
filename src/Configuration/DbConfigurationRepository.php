@@ -216,6 +216,23 @@ class DbConfigurationRepository implements ConfigurationRepositoryInterface
         );
     }
 
+    public function markPairingClaimed($shopId, $pairingToken)
+    {
+        return (bool) $this->db->update(
+            'bemoliveshopping_configuration',
+            array(
+                'pairing_token' => null,
+                'pairing_token_created_at' => null,
+                'pairing_expires_at' => null,
+                'connection_status' => 'connected',
+                'date_upd' => date('Y-m-d H:i:s'),
+            ),
+            '`id_shop` = ' . (int) $shopId . " AND `pairing_token` = '" . pSQL($pairingToken) . "'",
+            0,
+            true
+        );
+    }
+
     public function clearProvisionedCredentials($shopId)
     {
         return (bool) $this->db->update(

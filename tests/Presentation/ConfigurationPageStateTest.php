@@ -54,7 +54,7 @@ class ConfigurationPageStateTest extends TestCase
         $configuration = new StubConfigurationRepository();
         $configuration->approved = true;
         $configuration->credentials = $this->credentials();
-        $configuration->status = 'ready_to_pair';
+        $configuration->status = 'connected';
         $state = $this->state($configuration);
 
         self::assertSame(ConfigurationPageState::STEP_CONNECTED, $state->step());
@@ -69,7 +69,7 @@ class ConfigurationPageStateTest extends TestCase
     {
         $connected = new StubConfigurationRepository();
         $connected->credentials = $this->credentials();
-        $connected->status = 'ready_to_pair';
+        $connected->status = 'connected';
 
         foreach (array(new StubConfigurationRepository(), $connected) as $configuration) {
             self::assertFalse($this->state($configuration)->showsEndpointFields());
@@ -115,6 +115,7 @@ class StubConfigurationRepository implements ConfigurationRepositoryInterface
     public function getPairingAttempt($shopId) { return null; }
     public function beginPairingAttempt($shopId, $pairingToken) { return true; }
     public function markPairingStarted($shopId, $pairingToken, $expiresAt) { return true; }
+    public function markPairingClaimed($shopId, $pairingToken) { return true; }
     public function clearPairingAttempt($shopId, $pairingToken) { return true; }
     public function clearProvisionedCredentials($shopId) { return true; }
     public function saveProvisionedCredentials($shopId, $accountId, $key, $webhook, $buy, $api) { return true; }
