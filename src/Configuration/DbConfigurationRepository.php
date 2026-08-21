@@ -13,6 +13,9 @@ class DbConfigurationRepository implements ConfigurationRepositoryInterface
     const DEFAULT_API_BASE_URL = 'https://actions.bemo.now';
     const DEFAULT_APP_BASE_URL = 'https://bemo.now';
     const STATUS_NOT_CONFIGURED = 'not_configured';
+    const STATUS_PAIRING_STARTING = 'pairing_starting';
+    const STATUS_PAIRING_PENDING = 'pairing_pending';
+    const STATUS_CONNECTED = 'connected';
 
     /** @var \Db */
     private $db;
@@ -182,7 +185,7 @@ class DbConfigurationRepository implements ConfigurationRepositoryInterface
             'pairing_token' => pSQL($pairingToken),
             'pairing_token_created_at' => date('Y-m-d H:i:s'),
             'pairing_expires_at' => null,
-            'connection_status' => 'pairing_starting',
+            'connection_status' => self::STATUS_PAIRING_STARTING,
         ));
     }
 
@@ -191,7 +194,7 @@ class DbConfigurationRepository implements ConfigurationRepositoryInterface
         return (bool) $this->db->update(
             'bemoliveshopping_configuration',
             array(
-                'connection_status' => 'pairing_pending',
+                'connection_status' => self::STATUS_PAIRING_PENDING,
                 'pairing_expires_at' => date('Y-m-d H:i:s', (int) floor($expiresAt / 1000)),
                 'date_upd' => date('Y-m-d H:i:s'),
             ),
@@ -224,7 +227,7 @@ class DbConfigurationRepository implements ConfigurationRepositoryInterface
                 'pairing_token' => null,
                 'pairing_token_created_at' => null,
                 'pairing_expires_at' => null,
-                'connection_status' => 'connected',
+                'connection_status' => self::STATUS_CONNECTED,
                 'date_upd' => date('Y-m-d H:i:s'),
             ),
             '`id_shop` = ' . (int) $shopId . " AND `pairing_token` = '" . pSQL($pairingToken) . "'",

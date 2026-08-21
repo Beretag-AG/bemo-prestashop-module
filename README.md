@@ -155,7 +155,7 @@ process or store those details in this flow.
 Ask the merchant or hosting provider to complete these steps on a staging copy
 before BEMO enables embedded checkout on the live shop:
 
-1. Install or upgrade **BEMO Live Shopping 0.6.4 or newer**. Use the archive
+1. Install or upgrade **BEMO Live Shopping 0.6.5 or newer**. Use the archive
    whose filename matches the BEMO environment. No PrestaShop cron module is
    required.
 2. Enable HTTPS for the entire storefront, including cart, checkout, payment,

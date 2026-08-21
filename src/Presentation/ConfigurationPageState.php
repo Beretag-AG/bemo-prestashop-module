@@ -7,6 +7,7 @@ if (!defined('_PS_VERSION_')) {
 }
 
 use Bemo\LiveShopping\Configuration\ConfigurationRepositoryInterface;
+use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
 
 /**
  * Which configuration surfaces a shop should see, derived from the credentials
@@ -41,12 +42,13 @@ class ConfigurationPageState
             return new self(self::STEP_WELCOME, $developerMode);
         }
 
-        if ($status === 'pairing_starting' || $status === 'pairing_pending') {
+        if ($status === DbConfigurationRepository::STATUS_PAIRING_STARTING
+            || $status === DbConfigurationRepository::STATUS_PAIRING_PENDING) {
             return new self(self::STEP_WAITING, $developerMode);
         }
 
         return new self(
-            $status === 'connected' ? self::STEP_CONNECTED : self::STEP_WELCOME,
+            $status === DbConfigurationRepository::STATUS_CONNECTED ? self::STEP_CONNECTED : self::STEP_WELCOME,
             $developerMode
         );
     }

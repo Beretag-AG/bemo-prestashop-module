@@ -34,3 +34,27 @@
         </form>
     {/if}
 </div>
+{if $bemoRefreshWaiting}
+    <script>
+        (function () {
+            var changed = false;
+            var markChanged = function (event) {
+                var element = event.target;
+                while (element) {
+                    if (element.id === 'bemo-setup') {
+                        changed = true;
+                        return;
+                    }
+                    element = element.parentNode;
+                }
+            };
+            document.addEventListener('change', markChanged);
+            document.addEventListener('input', markChanged);
+            window.setTimeout(function () {
+                if (!changed) {
+                    window.location.reload();
+                }
+            }, 5000);
+        }());
+    </script>
+{/if}
