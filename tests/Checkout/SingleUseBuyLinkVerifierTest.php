@@ -24,6 +24,7 @@ class SingleUseBuyLinkVerifierTest extends TestCase
             self::NOW_MS
         ));
         self::assertSame(array(array(7, 'nonce_1', $payload['expiresAt'])), $nonces->claims);
+        self::assertSame(array(1800000000), $nonces->purges);
     }
 
     public function testRejectsAReplayOfAnAlreadyClaimedToken()
@@ -67,13 +68,14 @@ class SingleUseBuyLinkVerifierTest extends TestCase
     private function payload(array $overrides = array())
     {
         return array_merge(array(
+            'version' => 2,
+            'cartId' => 'cart_1',
             'connectionId' => 'connection_1',
             'expiresAt' => self::NOW_MS + 600000,
-            'externalProductId' => 119,
             'issuedAt' => self::NOW_MS,
             'nonce' => 'nonce_1',
-            'productId' => 'product_1',
             'sessionId' => 'session_1',
+            'items' => array(array('externalProductId' => 119, 'quantity' => 1)),
         ), $overrides);
     }
 
@@ -88,6 +90,7 @@ class SingleUseBuyLinkVerifierTest extends TestCase
 class BuyLinkNonceFake implements BuyLinkNonceRepositoryInterface
 {
     public $claims = array();
+    public $purges = array();
 
     private $claimed = array();
 
@@ -105,6 +108,8 @@ class BuyLinkNonceFake implements BuyLinkNonceRepositoryInterface
 
     public function purgeExpiredBefore($timestamp)
     {
+        $this->purges[] = $timestamp;
+
         return true;
     }
 }

@@ -13,8 +13,8 @@ require_once __DIR__ . '/config/distribution.php';
 require_once __DIR__ . '/config/autoload.php';
 
 use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
-use Bemo\LiveShopping\Checkout\CheckoutLanding;
 use Bemo\LiveShopping\Checkout\DbBuyLinkNonceRepository;
+use Bemo\LiveShopping\Checkout\CheckoutReadyBridge;
 use Bemo\LiveShopping\Installation\Installer;
 use Bemo\LiveShopping\Lock\DbShopLock;
 use Bemo\LiveShopping\Pairing\CurlPairingGateway;
@@ -38,15 +38,12 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.6.5';
+    const VERSION = '0.7.0';
     const CRON_CONTROLLER = 'cron';
     const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
     /** @var string */
     private $output = '';
-
-    /** @var bool */
-    private $outboxDrainRegistered = false;
 
     public function __construct()
     {
@@ -72,6 +69,11 @@ class Bemoliveshopping extends Module
     {
         if (version_compare(PHP_VERSION, '7.0', '<')) {
             $this->_errors[] = $this->l('BEMO Live Shopping requires PHP 7.0 or newer.');
+
+            return false;
+        }
+        if (version_compare(PHP_VERSION, '8.2', '>=')) {
+            $this->_errors[] = $this->l('BEMO Live Shopping supports PHP 7.0 through 8.1.');
 
             return false;
         }
@@ -152,11 +154,18 @@ class Bemoliveshopping extends Module
         return true;
     }
 
+    public function upgradeToVersion070()
+    {
+        return (new Installer(Db::getInstance()))->upgradeToVersion070()
+            && $this->registerBemoHooks()
+            && $this->repairWebservicePermissions();
+    }
+
     public function getContent()
     {
         // AdminModules otherwise opens PrestaShop's generic documentation next
         // to this module's own setup instructions.
-        $this->context->smarty->assign('help_link', false);
+        $this->context->smarty->clearAssign('help_link');
 
         if (Shop::getContext() !== Shop::CONTEXT_SHOP) {
             return $this->displayError(
@@ -259,10 +268,30 @@ class Bemoliveshopping extends Module
         return $this->drainWebhookOutbox();
     }
 
-    /**
-     * Shared by the optional PrestaShop cron hook, the post-request delivery,
-     * and the token-authenticated retry controller.
-     */
+    public function hookDisplayFooter()
+    {
+        $requestToken = Tools::getValue(CheckoutReadyBridge::QUERY_NAME);
+        if (!is_string($requestToken)
+            || !isset($this->context->cookie->{CheckoutReadyBridge::COOKIE_NAME})) {
+            return '';
+        }
+
+        $cookieValue = $this->context->cookie->{CheckoutReadyBridge::COOKIE_NAME};
+        unset($this->context->cookie->{CheckoutReadyBridge::COOKIE_NAME});
+        $bridge = new CheckoutReadyBridge();
+        if (!$bridge->isReadyRequest($cookieValue, $requestToken, time())) {
+            return '';
+        }
+
+        $shopId = isset($this->context->shop->id) ? (int) $this->context->shop->id : 0;
+        $parentOrigin = $bridge->parentOrigin(
+            (new DbConfigurationRepository(Db::getInstance()))->getAppBaseUrl($shopId)
+        );
+
+        return $parentOrigin === null ? '' : $bridge->messageScript($parentOrigin);
+    }
+
+    /** Drains queued notifications for the optional scheduler integrations. */
     public function drainWebhookOutbox($shopId = null, $limit = null)
     {
         try {
@@ -319,8 +348,7 @@ class Bemoliveshopping extends Module
             || !$this->persistActivationChoices(
                 $shopId,
                 false,
-                $repository->isEmbeddedCheckoutRequested($shopId),
-                $repository->getCheckoutLanding($shopId)
+                $repository->isEmbeddedCheckoutRequested($shopId)
             )) {
             return;
         }
@@ -480,26 +508,41 @@ class Bemoliveshopping extends Module
             return false;
         }
 
-        return $this->persistActivationChoices(
-            $shopId,
-            $requestedApproval,
-            $this->requestedChoice(
-                'BEMO_CONFIRM_EMBEDDED_CHECKOUT',
-                $repository->isEmbeddedCheckoutRequested($shopId)
-            ),
-            $this->requestedLanding($repository->getCheckoutLanding($shopId))
+        $embedded = $this->requestedChoice(
+            'BEMO_CONFIRM_EMBEDDED_CHECKOUT',
+            $repository->isEmbeddedCheckoutRequested($shopId)
         );
+        $changed = $embedded !== $repository->isEmbeddedCheckoutRequested($shopId);
+        if (!$this->persistActivationChoices($shopId, $requestedApproval, $embedded)) {
+            return false;
+        }
+
+        if ($changed) {
+            try {
+                $queued = $this->webhookOutbox()->enqueueConfiguration($shopId, $embedded, self::VERSION);
+            } catch (Exception $exception) {
+                $queued = false;
+            }
+            if (!$queued) {
+                PrestaShopLogger::addLog('BEMO configuration notification could not be queued', 3);
+                $this->output .= $this->displayError(
+                    $this->l('Your settings were saved, but the update could not be queued. BEMO will reconcile it during the next catalog sync.')
+                );
+            }
+        }
+
+        return true;
     }
 
-    private function persistActivationChoices($shopId, $approved, $embedded, $checkoutLanding)
+    private function persistActivationChoices($shopId, $approved, $embedded)
     {
         $repository = new DbConfigurationRepository(Db::getInstance());
         try {
             $saved = (new DbShopLock(Db::getInstance()))->synchronized(
                 'configuration',
                 $shopId,
-                function () use ($repository, $shopId, $approved, $embedded, $checkoutLanding) {
-                    return $repository->saveActivationChoices($shopId, $approved, $embedded, $checkoutLanding);
+                function () use ($repository, $shopId, $approved, $embedded) {
+                    return $repository->saveActivationChoices($shopId, $approved, $embedded, 'cart');
                 }
             );
         } catch (Exception $exception) {
@@ -586,13 +629,6 @@ class Bemoliveshopping extends Module
         $value = Tools::getValue($name, null);
 
         return $value === null ? (bool) $persisted : (string) $value === '1';
-    }
-
-    private function requestedLanding($persisted)
-    {
-        $value = Tools::getValue('BEMO_CHECKOUT_LANDING', null);
-
-        return CheckoutLanding::normalize($value === null ? $persisted : $value);
     }
 
     private function pairingErrorMessage($reason)
@@ -738,12 +774,12 @@ class Bemoliveshopping extends Module
                     'value' => $this->l('Configured in BEMO'),
                 ),
                 array(
-                    'label' => $this->l('Immediate notifications waiting to be sent'),
+                    'label' => $this->l('Notifications waiting for retry'),
                     'value' => (string) (new DbOutboxRepository(Db::getInstance()))->countPending($shopId),
                 ),
             ),
             'bemoQueueHelp' => $this->l(
-                'A small number can appear briefly after a catalog change. BEMO still checks the catalog from its servers if an immediate notification must be retried.'
+                'Queued notifications are sent only by the private retry address below. BEMO still reads the catalog from its servers, so these notifications are an optional speed-up.'
             ),
             'bemoManualTitle' => $this->l('Optional manual notification retry'),
             'bemoManualIntro' => $this->l(
@@ -751,7 +787,7 @@ class Bemoliveshopping extends Module
             ),
             'bemoManualStepOne' => $this->l('Schedule an HTTP GET request every 5 minutes.'),
             'bemoManualStepTwo' => $this->l('Use the private address shown below as the request URL.'),
-            'bemoManualStepThree' => $this->l('Do not share this address. Anyone who has it can start a catalog sync for this shop.'),
+            'bemoManualStepThree' => $this->l('Do not share this address. Anyone who has it can retry queued notifications for this shop.'),
             'bemoSyncUrl' => $cronUrl === null ? '' : $cronUrl,
             'bemoSyncUrlLabel' => $this->l('Private sync address'),
             'bemoSyncUrlUnavailable' => $this->l(
@@ -859,7 +895,6 @@ class Bemoliveshopping extends Module
                     : EndpointPolicy::PRODUCTION_APP_BASE_URL),
             'BEMO_CONFIRM_WEBSERVICE' => $repository->isWebserviceAccessApproved($shopId) ? 1 : 0,
             'BEMO_CONFIRM_EMBEDDED_CHECKOUT' => $repository->isEmbeddedCheckoutRequested($shopId) ? 1 : 0,
-            'BEMO_CHECKOUT_LANDING' => $repository->getCheckoutLanding($shopId),
         );
 
         return '<div id="bemo-setup">'
@@ -917,27 +952,6 @@ class Bemoliveshopping extends Module
                 array('id' => 'bemo_embed_off', 'value' => 0, 'label' => $this->l('No')),
             ),
         );
-        $inputs[] = array(
-            'type' => 'radio',
-            'label' => $this->l('After a viewer adds a product'),
-            'name' => 'BEMO_CHECKOUT_LANDING',
-            'desc' => $this->l(
-                'Send viewers to the cart so they can keep watching and add more, or straight to checkout to close the sale now. This applies to the next product a viewer clicks.'
-            ),
-            'values' => array(
-                array(
-                    'id' => 'bemo_checkout_landing_cart',
-                    'value' => CheckoutLanding::CART,
-                    'label' => $this->l('Open the cart (recommended)'),
-                ),
-                array(
-                    'id' => 'bemo_checkout_landing_checkout',
-                    'value' => CheckoutLanding::CHECKOUT,
-                    'label' => $this->l('Go straight to checkout'),
-                ),
-            ),
-        );
-
         return array(
             'form' => array(
                 'legend' => array(
@@ -988,6 +1002,7 @@ class Bemoliveshopping extends Module
             'actionObjectCartRuleUpdateAfter',
             'actionObjectCartRuleDeleteAfter',
             'actionCronJob',
+            'displayFooter',
         );
 
         foreach ($hooks as $hook) {
@@ -1022,8 +1037,6 @@ class Bemoliveshopping extends Module
             );
             if (!$queued) {
                 PrestaShopLogger::addLog('BEMO webhook event could not be queued', 3);
-            } else {
-                $this->scheduleWebhookDrain((int) $this->context->shop->id);
             }
 
             return $queued;
@@ -1032,21 +1045,6 @@ class Bemoliveshopping extends Module
 
             return false;
         }
-    }
-
-    private function scheduleWebhookDrain($shopId)
-    {
-        if ($this->outboxDrainRegistered) {
-            return;
-        }
-        $this->outboxDrainRegistered = true;
-
-        register_shutdown_function(function () use ($shopId) {
-            if (function_exists('fastcgi_finish_request')) {
-                fastcgi_finish_request();
-            }
-            $this->drainWebhookOutbox($shopId, 1);
-        });
     }
 
     private function webhookOutbox()

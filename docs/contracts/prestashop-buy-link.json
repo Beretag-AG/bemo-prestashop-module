@@ -2,13 +2,17 @@
   "secret": "contract-buy-link-secret",
   "now": 1800000000000,
   "payload": {
+    "version": 2,
+    "cartId": "cart_1",
     "connectionId": "connection_1",
-    "expiresAt": 1800000600000,
-    "externalProductId": 119,
+    "sessionId": "session_1",
     "issuedAt": 1800000000000,
+    "expiresAt": 1800000600000,
     "nonce": "nonce_1",
-    "productId": "product_1",
-    "sessionId": "session_1"
+    "items": [
+      {"externalProductId": 119, "externalVariantId": 24, "quantity": 2},
+      {"externalProductId": 120, "quantity": 1}
+    ]
   },
-  "token": "eyJjb25uZWN0aW9uSWQiOiJjb25uZWN0aW9uXzEiLCJleHBpcmVzQXQiOjE4MDAwMDA2MDAwMDAsImV4dGVybmFsUHJvZHVjdElkIjoxMTksImlzc3VlZEF0IjoxODAwMDAwMDAwMDAwLCJub25jZSI6Im5vbmNlXzEiLCJwcm9kdWN0SWQiOiJwcm9kdWN0XzEiLCJzZXNzaW9uSWQiOiJzZXNzaW9uXzEifQ.1d9d2f26fe2926c95457d74ba243e24fb53e9337a2ae421f14d671c5d7899fe1"
+  "token": "eyJ2ZXJzaW9uIjoyLCJjYXJ0SWQiOiJjYXJ0XzEiLCJjb25uZWN0aW9uSWQiOiJjb25uZWN0aW9uXzEiLCJzZXNzaW9uSWQiOiJzZXNzaW9uXzEiLCJpc3N1ZWRBdCI6MTgwMDAwMDAwMDAwMCwiZXhwaXJlc0F0IjoxODAwMDAwNjAwMDAwLCJub25jZSI6Im5vbmNlXzEiLCJpdGVtcyI6W3siZXh0ZXJuYWxQcm9kdWN0SWQiOjExOSwiZXh0ZXJuYWxWYXJpYW50SWQiOjI0LCJxdWFudGl0eSI6Mn0seyJleHRlcm5hbFByb2R1Y3RJZCI6MTIwLCJxdWFudGl0eSI6MX1dfQ.5c1eed7b4d79b4bb4734533aeeb020972b3e8aaa32f3a528dc183b21845d0ee9"
 }

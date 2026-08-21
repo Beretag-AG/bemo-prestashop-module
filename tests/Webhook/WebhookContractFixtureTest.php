@@ -11,16 +11,22 @@ class WebhookContractFixtureTest extends TestCase
         $path = dirname(__DIR__, 2) . '/docs/contracts/prestashop-webhook-events.json';
         $events = json_decode(file_get_contents($path), true);
 
-        self::assertCount(10, $events);
+        self::assertCount(11, $events);
         $hooks = array();
         foreach ($events as $event) {
             self::assertRegExp('/^prestashop:[A-Za-z0-9_-]{22}$/', $event['eventId']);
-            self::assertRegExp(
-                '/^(product|stock|price|voucher)\.(added|updated|deleted)$/',
-                $event['hook']
-            );
-            self::assertSame(strstr($event['hook'], '.', true), $event['resourceType']);
-            self::assertGreaterThan(0, $event['resourceId']);
+            if ($event['hook'] === 'configuration.updated') {
+                self::assertSame('configuration', $event['resourceType']);
+                self::assertSame($event['shopId'], $event['resourceId']);
+                self::assertSame(array(
+                    'embeddedCheckoutRequested' => true,
+                    'moduleVersion' => '0.7.0',
+                ), $event['configuration']);
+            } else {
+                self::assertRegExp('/^(product|stock|price|voucher)\.(added|updated|deleted)$/', $event['hook']);
+                self::assertSame(strstr($event['hook'], '.', true), $event['resourceType']);
+                self::assertGreaterThan(0, $event['resourceId']);
+            }
             $hooks[] = $event['hook'];
         }
         sort($hooks);
@@ -31,11 +37,13 @@ class WebhookContractFixtureTest extends TestCase
             'product.added',
             'product.deleted',
             'product.updated',
+            'configuration.updated',
             'stock.updated',
             'voucher.added',
             'voucher.deleted',
             'voucher.updated',
         );
+        sort($expectedHooks);
         self::assertSame($expectedHooks, $hooks);
     }
 

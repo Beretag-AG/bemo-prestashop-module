@@ -27,6 +27,10 @@ class SingleUseBuyLinkVerifier
             return null;
         }
 
+        // Checkout traffic is the one scheduler-independent path every shop
+        // using signed links has, so it also keeps the replay table bounded.
+        $this->nonces->purgeExpiredBefore((int) floor((int) $nowMs / 1000));
+
         if (!$this->nonces->claim($shopId, $payload['nonce'], (int) $payload['expiresAt'])) {
             return null;
         }

@@ -3,6 +3,7 @@
 namespace Bemo\LiveShopping\Tests\Configuration;
 
 use Bemo\LiveShopping\Checkout\CheckoutLanding;
+use Bemo\LiveShopping\Configuration\ConnectionStatus;
 use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
 use PHPUnit\Framework\TestCase;
 
@@ -61,10 +62,10 @@ class DbConfigurationRepositoryTest extends TestCase
         ));
         self::assertSame(1, $db->updatedValues['webservice_access_approved']);
         self::assertSame(0, $db->updatedValues['embedded_checkout_requested']);
-        self::assertSame(CheckoutLanding::CHECKOUT, $db->updatedValues['checkout_landing']);
+        self::assertSame(CheckoutLanding::CART, $db->updatedValues['checkout_landing']);
         self::assertTrue($repository->isWebserviceAccessApproved(7));
         self::assertFalse($repository->isEmbeddedCheckoutRequested(7));
-        self::assertSame(CheckoutLanding::CHECKOUT, $repository->getCheckoutLanding(7));
+        self::assertSame(CheckoutLanding::CART, $repository->getCheckoutLanding(7));
     }
 
     public function testDefaultsUnknownCheckoutLandingToCart()
@@ -86,7 +87,7 @@ class DbConfigurationRepositoryTest extends TestCase
 
         self::assertSame('pairing_pending', $repository->getConnectionStatus(7));
         self::assertSame(
-            DbConfigurationRepository::STATUS_NOT_CONFIGURED,
+            ConnectionStatus::NOT_CONFIGURED,
             $repository->getConnectionStatus(7)
         );
     }

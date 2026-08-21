@@ -92,6 +92,42 @@ class WebhookOutbox
         );
     }
 
+    public function enqueueConfiguration($shopId, $embeddedCheckoutRequested, $moduleVersion = null)
+    {
+        if (!is_array($this->configuration->getPairingCredentials($shopId))) {
+            return true;
+        }
+
+        $details = $this->shopDetails->get($shopId);
+        $occurredAt = (int) call_user_func($this->clock);
+        $eventId = $this->secrets->eventId();
+        $configuration = array('embeddedCheckoutRequested' => (bool) $embeddedCheckoutRequested);
+        if (is_string($moduleVersion) && $moduleVersion !== '') {
+            $configuration['moduleVersion'] = $moduleVersion;
+        }
+        $payload = json_encode(array(
+            'eventId' => $eventId,
+            'hook' => 'configuration.updated',
+            'occurredAt' => $occurredAt * 1000,
+            'resourceId' => (int) $shopId,
+            'resourceType' => 'configuration',
+            'shopId' => (int) $shopId,
+            'shopUrl' => $details['shopUrl'],
+            'configuration' => $configuration,
+        ));
+        if (!is_string($payload) || strlen($payload) > 16384) {
+            return false;
+        }
+
+        return $this->outbox->enqueue(
+            $shopId,
+            $eventId,
+            'configuration:configuration.updated',
+            $payload,
+            $occurredAt
+        );
+    }
+
     public function drain($limit = self::MAX_BATCH_SIZE)
     {
         $now = (int) call_user_func($this->clock);

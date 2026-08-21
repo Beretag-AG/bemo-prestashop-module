@@ -8,5 +8,6 @@
   {"eventId":"prestashop:0000000000000000000007","hook":"price.deleted","occurredAt":1800000000000,"resourceId":301,"resourceType":"price","shopId":7,"shopUrl":"https://shop.example"},
   {"eventId":"prestashop:0000000000000000000008","hook":"voucher.added","occurredAt":1800000000000,"resourceId":51,"resourceType":"voucher","shopId":7,"shopUrl":"https://shop.example"},
   {"eventId":"prestashop:0000000000000000000009","hook":"voucher.updated","occurredAt":1800000000000,"resourceId":51,"resourceType":"voucher","shopId":7,"shopUrl":"https://shop.example"},
-  {"eventId":"prestashop:0000000000000000000010","hook":"voucher.deleted","occurredAt":1800000000000,"resourceId":51,"resourceType":"voucher","shopId":7,"shopUrl":"https://shop.example"}
+  {"eventId":"prestashop:0000000000000000000010","hook":"voucher.deleted","occurredAt":1800000000000,"resourceId":51,"resourceType":"voucher","shopId":7,"shopUrl":"https://shop.example"},
+  {"eventId":"prestashop:0000000000000000000011","hook":"configuration.updated","occurredAt":1800000000000,"resourceId":7,"resourceType":"configuration","shopId":7,"shopUrl":"https://shop.example","configuration":{"embeddedCheckoutRequested":true,"moduleVersion":"0.7.0"}}
 ]
