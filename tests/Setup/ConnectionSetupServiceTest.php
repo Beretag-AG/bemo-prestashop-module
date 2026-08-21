@@ -113,6 +113,7 @@ class InMemoryConfigurationRepository implements ConfigurationRepositoryInterfac
     public function getPairingAttempt($shopId) { return null; }
     public function beginPairingAttempt($shopId, $pairingToken) { return true; }
     public function markPairingStarted($shopId, $pairingToken, $expiresAt) { return true; }
+    public function markPairingClaimed($shopId, $pairingToken) { return true; }
     public function clearPairingAttempt($shopId, $pairingToken) { return true; }
 
     public function clearProvisionedCredentials($shopId)

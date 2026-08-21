@@ -133,6 +133,17 @@ class DbConfigurationRepositoryTest extends TestCase
         self::assertSame('pairing_pending', $db->updatedValues['connection_status']);
         self::assertStringContainsString("`pairing_token` = 'new-token'", $db->updatedWhere);
     }
+
+    public function testClaimingClearsTheTokenAndMarksTheShopConnected()
+    {
+        $db = new ConfigurationDb();
+        $repository = new DbConfigurationRepository($db);
+
+        self::assertTrue($repository->markPairingClaimed(7, 'claimed-token'));
+        self::assertSame('connected', $db->updatedValues['connection_status']);
+        self::assertNull($db->updatedValues['pairing_token']);
+        self::assertStringContainsString("`pairing_token` = 'claimed-token'", $db->updatedWhere);
+    }
 }
 
 class ConfigurationDb

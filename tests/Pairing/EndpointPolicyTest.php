@@ -29,4 +29,24 @@ class EndpointPolicyTest extends TestCase
             $policy->normalizePair('http://localhost:3210', 'http://localhost:3000')
         );
     }
+
+    public function testStagingDistributionAcceptsOnlyTheFixedStagingPair()
+    {
+        $policy = new EndpointPolicy(new EndpointNormalizer(), false, 'staging');
+
+        self::assertSame(
+            array('https://basic-hummingbird-164.convex.site', 'https://beta.bemo.now'),
+            $policy->officialPair()
+        );
+        self::assertSame(
+            $policy->officialPair(),
+            $policy->normalizePair(
+                'https://basic-hummingbird-164.convex.site',
+                'https://beta.bemo.now'
+            )
+        );
+        self::assertNull(
+            $policy->normalizePair('https://actions.bemo.now', 'https://bemo.now')
+        );
+    }
 }

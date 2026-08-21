@@ -14,6 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: bash scripts/package.sh
+      - run: bash scripts/package.sh staging
       - run: bash tests/package-structure.sh
       - run: cp "dist/bemoliveshopping-${GITHUB_REF_NAME#v}.zip" dist/bemoliveshopping.zip
       - uses: softprops/action-gh-release@v2

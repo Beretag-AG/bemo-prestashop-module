@@ -23,7 +23,7 @@
     </table>
     <p class="help-block">{$bemoQueueHelp|escape:'html':'UTF-8'}</p>
 
-    <details{if !$bemoScheduled} open{/if}>
+    <details{if $bemoManualRetryOpen} open{/if}>
         <summary><strong>{$bemoManualTitle|escape:'html':'UTF-8'}</strong></summary>
         <div style="padding-top: 12px;">
             <p>{$bemoManualIntro|escape:'html':'UTF-8'}</p>

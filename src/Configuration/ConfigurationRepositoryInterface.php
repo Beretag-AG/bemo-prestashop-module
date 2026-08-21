@@ -47,6 +47,8 @@ interface ConfigurationRepositoryInterface
 
     public function markPairingStarted($shopId, $pairingToken, $expiresAt);
 
+    public function markPairingClaimed($shopId, $pairingToken);
+
     public function clearPairingAttempt($shopId, $pairingToken);
 
     public function clearProvisionedCredentials($shopId);

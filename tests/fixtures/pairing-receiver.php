@@ -13,5 +13,10 @@ $capture = array(
 );
 file_put_contents(getenv('BEMO_TEST_CAPTURE_PATH'), json_encode($capture));
 header('Content-Type: application/json');
-http_response_code(201);
-echo json_encode(array('expiresAt' => (int) getenv('BEMO_TEST_EXPIRES_AT')));
+if ($_SERVER['REQUEST_URI'] === '/prestashop/pairing/status') {
+    http_response_code(200);
+    echo json_encode(array('status' => getenv('BEMO_TEST_PAIRING_STATUS')));
+} else {
+    http_response_code(201);
+    echo json_encode(array('expiresAt' => (int) getenv('BEMO_TEST_EXPIRES_AT')));
+}

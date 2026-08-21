@@ -9,22 +9,23 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
+require_once __DIR__ . '/config/distribution.php';
 require_once __DIR__ . '/config/autoload.php';
 
 use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
 use Bemo\LiveShopping\Checkout\CheckoutLanding;
 use Bemo\LiveShopping\Checkout\DbBuyLinkNonceRepository;
 use Bemo\LiveShopping\Installation\Installer;
-use Bemo\LiveShopping\Installation\PrestaShopSchedulerModuleGateway;
-use Bemo\LiveShopping\Installation\SchedulerModuleSetup;
 use Bemo\LiveShopping\Lock\DbShopLock;
 use Bemo\LiveShopping\Pairing\CurlPairingGateway;
+use Bemo\LiveShopping\Pairing\CurlPairingStatusGateway;
 use Bemo\LiveShopping\Pairing\EndpointEnvironment;
 use Bemo\LiveShopping\Pairing\EndpointNormalizer;
 use Bemo\LiveShopping\Pairing\EndpointPolicy;
 use Bemo\LiveShopping\Pairing\PairingException;
 use Bemo\LiveShopping\Pairing\PairingResponseParser;
 use Bemo\LiveShopping\Pairing\PairingService;
+use Bemo\LiveShopping\Pairing\PairingStatusService;
 use Bemo\LiveShopping\Pairing\PrestaShopShopDetailsProvider;
 use Bemo\LiveShopping\Presentation\ConfigurationPageState;
 use Bemo\LiveShopping\Security\SecretGenerator;
@@ -37,12 +38,15 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.6.3';
+    const VERSION = '0.6.4';
     const CRON_CONTROLLER = 'cron';
     const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
     /** @var string */
     private $output = '';
+
+    /** @var bool */
+    private $outboxDrainRegistered = false;
 
     public function __construct()
     {
@@ -71,8 +75,6 @@ class Bemoliveshopping extends Module
 
             return false;
         }
-
-        $this->prepareSchedulerModule();
 
         if (!parent::install()) {
             return false;
@@ -137,13 +139,20 @@ class Bemoliveshopping extends Module
 
     public function upgradeToVersion063()
     {
-        $this->prepareSchedulerModule();
+        return $this->registerBemoHooks();
+    }
 
+    public function upgradeToVersion064()
+    {
         return $this->registerBemoHooks();
     }
 
     public function getContent()
     {
+        // AdminModules otherwise opens PrestaShop's generic documentation next
+        // to this module's own setup instructions.
+        $this->context->smarty->assign('help_link', false);
+
         if (Shop::getContext() !== Shop::CONTEXT_SHOP) {
             return $this->displayError(
                 $this->l('Pick a single shop first. Each shop connects to BEMO with its own key.')
@@ -158,9 +167,12 @@ class Bemoliveshopping extends Module
             $this->saveConfiguration();
         }
 
+        $repository = new DbConfigurationRepository(Db::getInstance());
+        $shopId = (int) $this->context->shop->id;
+        $this->reconcilePairingStatus($repository, $shopId);
         $state = ConfigurationPageState::derive(
-            new DbConfigurationRepository(Db::getInstance()),
-            (int) $this->context->shop->id,
+            $repository,
+            $shopId,
             $this->isDeveloperMode()
         );
 
@@ -170,6 +182,19 @@ class Bemoliveshopping extends Module
             . $this->renderCatalogSyncPanel($state)
             . $this->renderConfigurationForm($state)
             . $this->renderDisconnectPanel($state);
+    }
+
+    private function reconcilePairingStatus(DbConfigurationRepository $repository, $shopId)
+    {
+        $endpoints = new EndpointNormalizer();
+        try {
+            (new PairingStatusService(
+                $repository,
+                new CurlPairingStatusGateway($endpoints, 'BEMO-PrestaShop/' . self::VERSION)
+            ))->reconcile($shopId);
+        } catch (Exception $exception) {
+            PrestaShopLogger::addLog('BEMO pairing status could not be refreshed', 2);
+        }
     }
 
     public function hookActionObjectProductAddAfter($params)
@@ -230,8 +255,8 @@ class Bemoliveshopping extends Module
     }
 
     /**
-     * Shared by the Cron tasks manager hook and the token-authenticated cron
-     * controller, so a shop without that module still drains its queue.
+     * Shared by the optional PrestaShop cron hook, the post-request delivery,
+     * and the token-authenticated retry controller.
      */
     public function drainWebhookOutbox($shopId = null)
     {
@@ -322,7 +347,11 @@ class Bemoliveshopping extends Module
         $webservice = new PrestaShopWebserviceGateway();
         $secrets = new SecretGenerator();
         $endpoints = new EndpointNormalizer();
-        $endpointPolicy = new EndpointPolicy($endpoints, $this->isDeveloperMode());
+        $endpointPolicy = new EndpointPolicy(
+            $endpoints,
+            $this->isDeveloperMode(),
+            BEMO_DISTRIBUTION_ENVIRONMENT
+        );
         $lock = new DbShopLock(Db::getInstance());
         $setup = new ConnectionSetupService(
             $repository,
@@ -365,7 +394,11 @@ class Bemoliveshopping extends Module
     private function validatedEndpointsFromRequest()
     {
         $normalizer = new EndpointNormalizer();
-        $policy = new EndpointPolicy($normalizer, $this->isDeveloperMode());
+        $policy = new EndpointPolicy(
+            $normalizer,
+            $this->isDeveloperMode(),
+            BEMO_DISTRIBUTION_ENVIRONMENT
+        );
         $environment = new EndpointEnvironment();
         $environmentValues = $environment->overrideValues($policy);
         $pair = $this->isDeveloperMode()
@@ -375,10 +408,7 @@ class Bemoliveshopping extends Module
                     Tools::getValue('BEMO_API_BASE_URL'),
                     Tools::getValue('BEMO_APP_BASE_URL')
                 ))
-            : $policy->normalizePair(
-                EndpointPolicy::PRODUCTION_API_BASE_URL,
-                EndpointPolicy::PRODUCTION_APP_BASE_URL
-            );
+            : $policy->officialPair();
 
         if ($pair === null) {
             $this->output .= $this->displayError(
@@ -683,46 +713,30 @@ class Bemoliveshopping extends Module
 
         $shopId = (int) $this->context->shop->id;
         $cronUrl = $this->cronUrl($shopId);
-        $scheduled = $this->isCronModuleActive();
-
         $this->context->smarty->assign(array(
             'bemoTitle' => $this->l('Catalog sync'),
-            'bemoScheduled' => $scheduled,
-            'bemoStatusTitle' => $scheduled
-                ? $this->l('Automatic sync is enabled')
-                : $this->l('Automatic scheduler is unavailable'),
-            'bemoStatusText' => $scheduled
-                ? $this->l(
-                    'BEMO is registered with PrestaShop Cron tasks manager. There is nothing else to configure here. Catalog changes are sent whenever that manager runs.'
-                )
-                : $this->l(
-                    'BEMO could not install or enable PrestaShop Cron tasks manager. Catalog changes are recorded, but they cannot be sent until you configure the manual scheduler below.'
-                ),
-            'bemoWarning' => $scheduled
-                ? ''
-                : $this->l(
-                    'Catalog changes will remain queued until you complete one of the manual setup options below.'
-                ),
+            'bemoManualRetryOpen' => false,
+            'bemoStatusTitle' => $this->l('BEMO manages catalog sync'),
+            'bemoStatusText' => $this->l(
+                'No PrestaShop cron module is required. BEMO checks this shop automatically and the module sends an immediate notification after a product, price, stock, or voucher changes.'
+            ),
+            'bemoWarning' => '',
             'bemoRows' => array(
                 array(
-                    'label' => $this->l('Scheduler'),
-                    'value' => $scheduled
-                        ? $this->l('Automatic, through PrestaShop Cron tasks manager')
-                        : $this->l('Not detected'),
+                    'label' => $this->l('Primary sync'),
+                    'value' => $this->l('Automatic, managed by BEMO'),
                 ),
                 array(
-                    'label' => $this->l('Changes waiting to be sent'),
+                    'label' => $this->l('Immediate notifications waiting to be sent'),
                     'value' => (string) (new DbOutboxRepository(Db::getInstance()))->countPending($shopId),
                 ),
             ),
             'bemoQueueHelp' => $this->l(
-                'A small number can appear briefly after a product, price, or stock change. If this number keeps growing, the scheduler is not running correctly.'
+                'A small number can appear briefly after a catalog change. BEMO still checks the catalog from its servers if an immediate notification must be retried.'
             ),
-            'bemoManualTitle' => $scheduled
-                ? $this->l('Manual scheduler setup (only needed if automatic sync stops)')
-                : $this->l('Manual scheduler setup'),
+            'bemoManualTitle' => $this->l('Optional manual notification retry'),
             'bemoManualIntro' => $this->l(
-                'In your hosting panel or server scheduler, create a job that opens this address every 5 minutes.'
+                'This is not required for normal catalog sync. If you want the shop to retry immediate notifications on a fixed schedule, create a job that opens this address every 5 minutes.'
             ),
             'bemoManualStepOne' => $this->l('Schedule an HTTP GET request every 5 minutes.'),
             'bemoManualStepTwo' => $this->l('Use the private address shown below as the request URL.'),
@@ -775,24 +789,6 @@ class Bemoliveshopping extends Module
     {
         return AdminController::$currentIndex . '&configure=' . $this->name
             . '&token=' . Tools::getAdminTokenLite('AdminModules');
-    }
-
-    private function isCronModuleActive()
-    {
-        return Module::isInstalled('cronjobs') && Module::isEnabled('cronjobs');
-    }
-
-    private function prepareSchedulerModule()
-    {
-        $available = (new SchedulerModuleSetup(new PrestaShopSchedulerModuleGateway()))
-            ->ensureAvailable();
-
-        if (!$available) {
-            PrestaShopLogger::addLog(
-                'BEMO could not install or enable the PrestaShop Cron tasks manager; manual scheduling remains available',
-                2
-            );
-        }
     }
 
     private function cronUrl($shopId)
@@ -1015,6 +1011,8 @@ class Bemoliveshopping extends Module
             );
             if (!$queued) {
                 PrestaShopLogger::addLog('BEMO webhook event could not be queued', 3);
+            } else {
+                $this->scheduleWebhookDrain((int) $this->context->shop->id);
             }
 
             return $queued;
@@ -1023,6 +1021,21 @@ class Bemoliveshopping extends Module
 
             return false;
         }
+    }
+
+    private function scheduleWebhookDrain($shopId)
+    {
+        if ($this->outboxDrainRegistered) {
+            return;
+        }
+        $this->outboxDrainRegistered = true;
+
+        register_shutdown_function(function () use ($shopId) {
+            if (function_exists('fastcgi_finish_request')) {
+                fastcgi_finish_request();
+            }
+            $this->drainWebhookOutbox($shopId);
+        });
     }
 
     private function webhookOutbox()
