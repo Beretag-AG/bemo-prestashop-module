@@ -38,7 +38,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.6.4';
+    const VERSION = '0.6.5';
     const CRON_CONTROLLER = 'cron';
     const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
@@ -145,6 +145,11 @@ class Bemoliveshopping extends Module
     public function upgradeToVersion064()
     {
         return $this->registerBemoHooks();
+    }
+
+    public function upgradeToVersion065()
+    {
+        return true;
     }
 
     public function getContent()
@@ -258,12 +263,15 @@ class Bemoliveshopping extends Module
      * Shared by the optional PrestaShop cron hook, the post-request delivery,
      * and the token-authenticated retry controller.
      */
-    public function drainWebhookOutbox($shopId = null)
+    public function drainWebhookOutbox($shopId = null, $limit = null)
     {
         try {
             $drained = $shopId === null
                 ? $this->webhookOutbox()->drain()
-                : $this->webhookOutbox()->drainShop((int) $shopId);
+                : $this->webhookOutbox()->drainShop(
+                    (int) $shopId,
+                    $limit === null ? WebhookOutbox::MAX_BATCH_SIZE : max(1, (int) $limit)
+                );
             (new DbBuyLinkNonceRepository(Db::getInstance()))->purgeExpiredBefore(time());
 
             return $drained;
@@ -691,6 +699,7 @@ class Bemoliveshopping extends Module
                 ),
             ),
             'bemoRestartLabel' => $state->showsRestartAction() ? $this->l('Restart connection') : '',
+            'bemoRefreshWaiting' => $state->isWaiting(),
             'bemoFormAction' => $this->configurationFormAction(),
             // Developer mode is the only case where the endpoints are editable,
             // so the restart post has to carry what the settings form would send.
@@ -716,15 +725,17 @@ class Bemoliveshopping extends Module
         $this->context->smarty->assign(array(
             'bemoTitle' => $this->l('Catalog sync'),
             'bemoManualRetryOpen' => false,
-            'bemoStatusTitle' => $this->l('BEMO manages catalog sync'),
+            'bemoStatusTitle' => $this->l('Configured for automatic catalog sync'),
             'bemoStatusText' => $this->l(
-                'No PrestaShop cron module is required. BEMO checks this shop automatically and the module sends an immediate notification after a product, price, stock, or voucher changes.'
+                'No PrestaShop cron module is required. BEMO normally checks this shop automatically. This module also queues a notification after a product, price, stock, or voucher changes.'
             ),
-            'bemoWarning' => '',
+            'bemoWarning' => $this->l(
+                'This page confirms the shop is connected, but it cannot verify BEMO\'s current scheduler status. Check the shop connection in BEMO if catalog changes stop appearing.'
+            ),
             'bemoRows' => array(
                 array(
                     'label' => $this->l('Primary sync'),
-                    'value' => $this->l('Automatic, managed by BEMO'),
+                    'value' => $this->l('Configured in BEMO'),
                 ),
                 array(
                     'label' => $this->l('Immediate notifications waiting to be sent'),
@@ -1034,7 +1045,7 @@ class Bemoliveshopping extends Module
             if (function_exists('fastcgi_finish_request')) {
                 fastcgi_finish_request();
             }
-            $this->drainWebhookOutbox($shopId);
+            $this->drainWebhookOutbox($shopId, 1);
         });
     }
 

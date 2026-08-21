@@ -7,6 +7,7 @@ if (!defined('_PS_VERSION_')) {
 }
 
 use Bemo\LiveShopping\Configuration\ConfigurationRepositoryInterface;
+use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
 
 class PairingStatusService
 {
@@ -26,7 +27,7 @@ class PairingStatusService
 
     public function reconcile($shopId)
     {
-        if ($this->configuration->getConnectionStatus($shopId) !== 'pairing_pending') {
+        if ($this->configuration->getConnectionStatus($shopId) !== DbConfigurationRepository::STATUS_PAIRING_PENDING) {
             return false;
         }
 

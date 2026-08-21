@@ -41,7 +41,7 @@ class CurlWebhookGateway implements WebhookGatewayInterface
         }
         $response = '';
         $options = array(
-            CURLOPT_CONNECTTIMEOUT => 3,
+            CURLOPT_CONNECTTIMEOUT => 1,
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_HTTPHEADER => array(
                 'Accept: application/json',
@@ -55,7 +55,7 @@ class CurlWebhookGateway implements WebhookGatewayInterface
             CURLOPT_RETURNTRANSFER => false,
             CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_TIMEOUT => 10,
+            CURLOPT_TIMEOUT => 2,
             CURLOPT_USERAGENT => $this->userAgent,
             CURLOPT_WRITEFUNCTION => function ($curl, $chunk) use (&$response) {
                 if (strlen($response) + strlen($chunk) > self::MAX_RESPONSE_BYTES) {
