@@ -15,6 +15,8 @@ use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
 use Bemo\LiveShopping\Checkout\CheckoutLanding;
 use Bemo\LiveShopping\Checkout\DbBuyLinkNonceRepository;
 use Bemo\LiveShopping\Installation\Installer;
+use Bemo\LiveShopping\Installation\PrestaShopSchedulerModuleGateway;
+use Bemo\LiveShopping\Installation\SchedulerModuleSetup;
 use Bemo\LiveShopping\Lock\DbShopLock;
 use Bemo\LiveShopping\Pairing\CurlPairingGateway;
 use Bemo\LiveShopping\Pairing\EndpointEnvironment;
@@ -35,7 +37,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.6.2';
+    const VERSION = '0.6.3';
     const CRON_CONTROLLER = 'cron';
     const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
@@ -69,6 +71,8 @@ class Bemoliveshopping extends Module
 
             return false;
         }
+
+        $this->prepareSchedulerModule();
 
         if (!parent::install()) {
             return false;
@@ -128,6 +132,13 @@ class Bemoliveshopping extends Module
 
     public function upgradeToVersion060()
     {
+        return $this->registerBemoHooks();
+    }
+
+    public function upgradeToVersion063()
+    {
+        $this->prepareSchedulerModule();
+
         return $this->registerBemoHooks();
     }
 
@@ -679,13 +690,13 @@ class Bemoliveshopping extends Module
             'bemoScheduled' => $scheduled,
             'bemoStatusTitle' => $scheduled
                 ? $this->l('Automatic sync is enabled')
-                : $this->l('A scheduler still needs to be configured'),
+                : $this->l('Automatic scheduler is unavailable'),
             'bemoStatusText' => $scheduled
                 ? $this->l(
                     'BEMO is registered with PrestaShop Cron tasks manager. There is nothing else to configure here. Catalog changes are sent whenever that manager runs.'
                 )
                 : $this->l(
-                    'BEMO records catalog changes, but it cannot send them until a scheduler calls the private sync address below.'
+                    'BEMO could not install or enable PrestaShop Cron tasks manager. Catalog changes are recorded, but they cannot be sent until you configure the manual scheduler below.'
                 ),
             'bemoWarning' => $scheduled
                 ? ''
@@ -769,6 +780,19 @@ class Bemoliveshopping extends Module
     private function isCronModuleActive()
     {
         return Module::isInstalled('cronjobs') && Module::isEnabled('cronjobs');
+    }
+
+    private function prepareSchedulerModule()
+    {
+        $available = (new SchedulerModuleSetup(new PrestaShopSchedulerModuleGateway()))
+            ->ensureAvailable();
+
+        if (!$available) {
+            PrestaShopLogger::addLog(
+                'BEMO could not install or enable the PrestaShop Cron tasks manager; manual scheduling remains available',
+                2
+            );
+        }
     }
 
     private function cronUrl($shopId)

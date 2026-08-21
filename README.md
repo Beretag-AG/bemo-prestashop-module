@@ -21,6 +21,11 @@ merchant's own storefront.
 | PHP | 7.0 through 8.1 |
 | Scheduler | PrestaShop Cron tasks manager (`cronjobs`) **or** any scheduler that can call a URL |
 
+BEMO installs or enables **Cron tasks manager** automatically when its package
+is already available in the shop. If the package is absent or cannot be
+enabled, BEMO still installs and shows exact manual scheduler instructions on
+its configuration page.
+
 PrestaShop 1.7.3 installations running PHP 5.4–5.6 must upgrade PHP before
 installing this module. PrestaShop 9 is not supported by the current release.
 
@@ -81,9 +86,10 @@ shop yet, and the connection, catalog sync, settings, and disconnect panels once
 it has. The BEMO endpoints are editable only when PrestaShop developer mode is
 enabled; otherwise the production endpoints are used and hidden.
 
-Queued catalog events need a scheduler. Either keep the **Cron tasks manager**
-module active, or call the sync address shown in the **Catalog sync** panel from
-the hosting platform's scheduler, for example every five minutes:
+Queued catalog events need a scheduler. BEMO first tries to install or enable
+**Cron tasks manager**. If that is unavailable, call the sync address shown in
+the **Catalog sync** panel from the hosting platform's scheduler every five
+minutes:
 
 ```cron
 */5 * * * * curl -sS -o /dev/null 'https://shop.example/module/bemoliveshopping/cron?token=...'
