@@ -38,7 +38,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.7.1';
+    const VERSION = '0.8.0';
     const CRON_CONTROLLER = 'cron';
     const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
@@ -61,7 +61,7 @@ class Bemoliveshopping extends Module
         parent::__construct();
 
         $this->displayName = $this->l('BEMO Live Shopping');
-        $this->description = $this->l('Sell your products live: a BEMO creator streams a show, viewers buy in your shop.');
+        $this->description = $this->l('Sell products during BEMO live shows. Viewers buy from your shop.');
         $this->confirmUninstall = $this->l('Uninstall BEMO Live Shopping? Your settings are deleted and the read-only catalog key is removed from this shop.');
     }
 
@@ -168,9 +168,7 @@ class Bemoliveshopping extends Module
         $this->context->smarty->clearAssign('help_link');
 
         if (Shop::getContext() !== Shop::CONTEXT_SHOP) {
-            return $this->displayError(
-                $this->l('Pick a single shop first. Each shop connects to BEMO with its own key.')
-            );
+            return $this->renderShopOverview();
         }
 
         if (Tools::isSubmit('submitBemoActivateAccount')) {
@@ -196,6 +194,57 @@ class Bemoliveshopping extends Module
             . $this->renderCatalogSyncPanel($state)
             . $this->renderConfigurationForm($state)
             . $this->renderDisconnectPanel($state);
+    }
+
+    private function renderShopOverview()
+    {
+        $repository = new DbConfigurationRepository(Db::getInstance());
+        $shops = array();
+
+        foreach (Shop::getShops(false) as $shop) {
+            if (!isset($shop['id_shop'], $shop['name'])) {
+                continue;
+            }
+            $shopId = (int) $shop['id_shop'];
+            $state = ConfigurationPageState::derive(
+                $repository,
+                $shopId,
+                $this->isDeveloperMode()
+            );
+            $status = $this->connectionStatusBadge($state);
+            $shops[] = array(
+                'name' => (string) $shop['name'],
+                'status' => $status[0],
+                'badge' => $status[1],
+                'url' => $this->shopConfigurationUrl($shopId),
+                'action' => $state->isConnected()
+                    ? $this->l('Manage shop')
+                    : ($state->isWaiting()
+                        ? $this->l('Finish connection')
+                        : $this->l('Connect shop')),
+            );
+        }
+
+        $this->context->smarty->assign(array(
+            'bemoTitle' => $this->l('Your BEMO shops'),
+            'bemoIntro' => $this->l(
+                'Connect each shop you want to use with BEMO.'
+            ),
+            'bemoHelp' => $this->l(
+                'Each shop keeps its own products, prices, stock, currency, and checkout.'
+            ),
+            'bemoShops' => $shops,
+        ));
+
+        return $this->display(__FILE__, 'views/templates/admin/shop-overview.tpl');
+    }
+
+    private function shopConfigurationUrl($shopId)
+    {
+        return AdminController::$currentIndex
+            . '&configure=' . $this->name
+            . '&setShopContext=s-' . (int) $shopId
+            . '&token=' . Tools::getAdminTokenLite('AdminModules');
     }
 
     private function reconcilePairingStatus(DbConfigurationRepository $repository, $shopId)
@@ -711,7 +760,7 @@ class Bemoliveshopping extends Module
             'bemoTitle' => $this->l('Your BEMO connection'),
             'bemoIntro' => $state->isWaiting()
                 ? $this->l(
-                    'Your shop is ready. A BEMO creator now has to claim it from their BEMO account to finish the connection. The claim link expires after a while: if nothing happens, restart the connection to get a new one.'
+                    'Your shop is ready. Finish the connection from your BEMO account. If the link expires, restart the connection.'
                 )
                 : '',
             'bemoRows' => array(
@@ -807,7 +856,7 @@ class Bemoliveshopping extends Module
         $this->context->smarty->assign(array(
             'bemoTitle' => $this->l('Disconnect from BEMO'),
             'bemoText' => $this->l(
-                'Disconnecting stops live selling for this shop: the catalog key is deleted and BEMO stops receiving your catalog changes. Your products, orders, and settings in PrestaShop stay untouched, and you can connect again at any time.'
+                'Disconnecting stops live selling for this shop. BEMO deletes the catalog key and stops receiving updates. Your PrestaShop products, orders, and settings stay unchanged.'
             ),
             'bemoButtonLabel' => $this->l('Disconnect from BEMO'),
             'bemoConfirm' => $this->l(
@@ -822,7 +871,7 @@ class Bemoliveshopping extends Module
     private function connectionStatusBadge(ConfigurationPageState $state)
     {
         if ($state->isWaiting()) {
-            return array($this->l('Waiting for a BEMO creator to claim this shop'), 'label-warning');
+            return array($this->l('Waiting for BEMO setup'), 'label-warning');
         }
 
         if ($state->isConnected()) {
@@ -945,7 +994,7 @@ class Bemoliveshopping extends Module
             'name' => 'BEMO_CONFIRM_EMBEDDED_CHECKOUT',
             'is_bool' => true,
             'desc' => $this->l(
-                'Viewers add products and pay while they keep watching, which sells more than sending them away to a new tab. Your shop needs HTTPS, cross-site checkout cookies, and framing headers that allow BEMO. BEMO checks this once per shop, and until then your shop opens in a new tab.'
+                'Viewers can add products and pay while they keep watching. Your shop must use HTTPS and allow BEMO cookies and framing. Until BEMO approves this shop, checkout opens in a new tab.'
             ),
             'values' => array(
                 array('id' => 'bemo_embed_on', 'value' => 1, 'label' => $this->l('Yes')),

@@ -27,6 +27,8 @@ class PairingServiceTest extends TestCase
 
         self::assertSame(array(array(7, 'https://api.example.com')), $setup->calls);
         self::assertSame(2, $gateway->payload['languageId']);
+        self::assertSame(7, $gateway->payload['shopId']);
+        self::assertSame('Germany store', $gateway->payload['shopName']);
         self::assertTrue($gateway->payload['embeddedCheckoutReady']);
         self::assertSame('https://merchant.example/shop', $gateway->payload['shopUrl']);
         self::assertSame($configuration->credentials['webservice_key'], $gateway->payload['webserviceKey']);
@@ -233,6 +235,8 @@ class FixedShopDetails implements ShopDetailsProviderInterface
     public function get($shopId)
     {
         return array(
+            'shopId' => (int) $shopId,
+            'shopName' => 'Germany store',
             'shopUrl' => 'https://merchant.example/shop',
             'platformVersion' => '8.2.6',
             'languageId' => 2,

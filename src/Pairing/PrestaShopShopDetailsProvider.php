@@ -45,6 +45,8 @@ class PrestaShopShopDetailsProvider implements ShopDetailsProviderInterface
         }
 
         return array(
+            'shopId' => (int) $shopId,
+            'shopName' => (string) $shop->name,
             'shopUrl' => $shopUrl,
             'platformVersion' => _PS_VERSION_,
             'languageId' => $languageId,

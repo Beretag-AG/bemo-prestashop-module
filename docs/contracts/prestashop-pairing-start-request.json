@@ -1,5 +1,7 @@
 {
   "pairingToken": "abcdefghijklmnopqrstuv",
+  "shopId": 7,
+  "shopName": "Germany store",
   "shopUrl": "https://merchant.example",
   "platformVersion": "8.2.6",
   "languageId": 1,

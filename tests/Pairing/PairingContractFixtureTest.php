@@ -21,6 +21,8 @@ class PairingContractFixtureTest extends TestCase
             'languages',
             'pairingToken',
             'platformVersion',
+            'shopId',
+            'shopName',
             'shopUrl',
             'webhookSecret',
             'webserviceKey',
