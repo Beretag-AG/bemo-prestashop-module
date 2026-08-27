@@ -12,7 +12,7 @@
             <tr>
                 <th>{l s='Shop' mod='bemoliveshopping'}</th>
                 <th>{l s='Status' mod='bemoliveshopping'}</th>
-                <th class="text-right">{l s='Manage' mod='bemoliveshopping'}</th>
+                <th class="text-right">{l s='Action' mod='bemoliveshopping'}</th>
             </tr>
         </thead>
         <tbody>

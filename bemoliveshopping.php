@@ -40,7 +40,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.8.1';
+    const VERSION = '0.8.2';
     const CRON_CONTROLLER = 'cron';
     const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
@@ -63,7 +63,7 @@ class Bemoliveshopping extends Module
         parent::__construct();
 
         $this->displayName = $this->l('BEMO Live Shopping');
-        $this->description = $this->l('Sell products during BEMO live shows. Viewers buy from your shop.');
+        $this->description = $this->l('Connect your shops to BEMO and choose what to sell in each live session.');
         $this->confirmUninstall = $this->l('Uninstall BEMO Live Shopping? Your settings are deleted and the read-only catalog key is removed from this shop.');
     }
 
@@ -236,12 +236,12 @@ class Bemoliveshopping extends Module
         }
 
         $this->context->smarty->assign(array(
-            'bemoTitle' => $this->l('Your BEMO shops'),
+            'bemoTitle' => $this->l('Connect your PrestaShop shops'),
             'bemoIntro' => $this->l(
-                'Connect each shop you want to use with BEMO.'
+                'Connect each shop once. Use the same BEMO account to keep them together.'
             ),
             'bemoHelp' => $this->l(
-                'Each shop keeps its own products, prices, stock, currency, and checkout.'
+                'In BEMO, choose one shop and its products for each live session.'
             ),
             'bemoShops' => $shops,
         ));
@@ -721,34 +721,35 @@ class Bemoliveshopping extends Module
             return '';
         }
 
+        $shopName = (string) $this->context->shop->name;
         $this->context->smarty->assign(array(
-            'bemoTitle' => $this->l('Sell your products in live shows'),
+            'bemoTitle' => sprintf($this->l('Connect %s to BEMO'), $shopName),
             'bemoLead' => $this->l(
-                'A BEMO creator streams a live show and viewers buy in your shop, in their own cart, at your prices.'
+                'This setup connects only this shop. Your other PrestaShop shops stay separate.'
             ),
-            'bemoStepsTitle' => $this->l('What happens when you connect'),
+            'bemoStepsTitle' => $this->l('What to expect'),
             'bemoSteps' => array(
                 array(
-                    'title' => $this->l('A read-only key is created for your catalog.'),
+                    'title' => $this->l('BEMO reads this shop only.'),
                     'text' => $this->l(
-                        'BEMO can read your products, prices, and stock. It can never change them or see your orders and customers.'
+                        'Its products, prices, stock, currency, and checkout stay separate.'
                     ),
                 ),
                 array(
-                    'title' => $this->l('Your catalog stays in sync automatically.'),
+                    'title' => $this->l('Your shops stay in one BEMO account.'),
                     'text' => $this->l(
-                        'Every price, stock, and product change reaches BEMO within minutes, so viewers never see an offer you no longer sell.'
+                        'Repeat this setup for each shop while signed in to the same account.'
                     ),
                 ),
                 array(
-                    'title' => $this->l('You choose how checkout opens.'),
+                    'title' => $this->l('You choose per live session.'),
                     'text' => $this->l(
-                        'Viewers buy without leaving the show, or in a new tab in your shop. Either way they pay in your shop.'
+                        'In BEMO, select one shop and the products you want to sell.'
                     ),
                 ),
             ),
             'bemoSetupAnchor' => '#bemo-setup',
-            'bemoCta' => $this->l('Start setup'),
+            'bemoCta' => sprintf($this->l('Set up %s'), $shopName),
             'bemoDocsUrl' => self::DOCS_URL,
             'bemoDocsLabel' => $this->l('Read the setup guide'),
         ));
@@ -764,13 +765,14 @@ class Bemoliveshopping extends Module
 
         $repository = new DbConfigurationRepository(Db::getInstance());
         $shopId = (int) $this->context->shop->id;
+        $shopName = (string) $this->context->shop->name;
         $status = $this->connectionStatusBadge($state);
 
         $this->context->smarty->assign(array(
-            'bemoTitle' => $this->l('Your BEMO connection'),
+            'bemoTitle' => sprintf($this->l('BEMO connection for %s'), $shopName),
             'bemoIntro' => $state->isWaiting()
                 ? $this->l(
-                    'Your shop is ready. Finish the connection from your BEMO account. If the link expires, restart the connection.'
+                    'Finish in the BEMO account where you want this shop to appear.'
                 )
                 : '',
             'bemoRows' => array(
@@ -781,7 +783,13 @@ class Bemoliveshopping extends Module
                     'link' => false,
                 ),
                 array(
-                    'label' => $this->l('Your shop'),
+                    'label' => $this->l('PrestaShop shop'),
+                    'value' => $shopName,
+                    'badge' => '',
+                    'link' => false,
+                ),
+                array(
+                    'label' => $this->l('Shop address'),
                     'value' => $this->context->shop->getBaseURL(true),
                     'badge' => '',
                     'link' => true,
@@ -820,12 +828,12 @@ class Bemoliveshopping extends Module
         $this->context->smarty->assign(array(
             'bemoTitle' => $this->l('Catalog sync'),
             'bemoManualRetryOpen' => false,
-            'bemoStatusTitle' => $this->l('Configured for automatic catalog sync'),
+            'bemoStatusTitle' => $this->l('Automatic sync is on'),
             'bemoStatusText' => $this->l(
-                'No PrestaShop cron module is required. BEMO normally checks this shop automatically. This module also queues a notification after a product, price, stock, or voucher changes.'
+                'BEMO checks this shop automatically. Product, price, stock, and voucher changes also notify BEMO.'
             ),
             'bemoWarning' => $this->l(
-                'This page confirms the shop is connected, but it cannot verify BEMO\'s current scheduler status. Check the shop connection in BEMO if catalog changes stop appearing.'
+                'If updates stop, check this shop\'s status in BEMO.'
             ),
             'bemoRows' => array(
                 array(
@@ -838,7 +846,7 @@ class Bemoliveshopping extends Module
                 ),
             ),
             'bemoQueueHelp' => $this->l(
-                'Queued notifications are sent only by the private retry address below. BEMO still reads the catalog from its servers, so these notifications are an optional speed-up.'
+                'Queued notifications only speed up sync. BEMO still checks the catalog itself.'
             ),
             'bemoManualTitle' => $this->l('Optional manual notification retry'),
             'bemoManualIntro' => $this->l(
@@ -963,6 +971,7 @@ class Bemoliveshopping extends Module
 
     private function configurationForm(ConfigurationPageState $state, $environmentEndpointsLocked = false)
     {
+        $shopName = (string) $this->context->shop->name;
         $inputs = array();
         if ($state->showsEndpointFields()) {
             $inputs[] = array(
@@ -988,10 +997,10 @@ class Bemoliveshopping extends Module
             'is_bool' => true,
             'desc' => $state->isWelcome()
                 ? $this->l(
-                    'Required to connect. BEMO can read your products, prices, and stock. It can never change them or see your orders and customers.'
+                    'Required. BEMO can read this shop\'s catalog, but cannot change it or read orders or customers.'
                 )
                 : $this->l(
-                    'BEMO can read your products, prices, and stock. It can never change them or see your orders and customers. Turning this off disconnects the shop and deletes the catalog key.'
+                    'BEMO reads this shop\'s catalog. Turning this off disconnects the shop and deletes its key.'
                 ),
             'values' => array(
                 array('id' => 'bemo_ws_on', 'value' => 1, 'label' => $this->l('Yes')),
@@ -1004,7 +1013,7 @@ class Bemoliveshopping extends Module
             'name' => 'BEMO_CONFIRM_EMBEDDED_CHECKOUT',
             'is_bool' => true,
             'desc' => $this->l(
-                'Viewers can add products and pay while they keep watching. Your shop must use HTTPS and allow BEMO cookies and framing. Until BEMO approves this shop, checkout opens in a new tab.'
+                'Viewers can check out without leaving the show. This requires HTTPS and BEMO approval. Until then, checkout opens in a new tab.'
             ),
             'values' => array(
                 array('id' => 'bemo_embed_on', 'value' => 1, 'label' => $this->l('Yes')),
@@ -1014,12 +1023,14 @@ class Bemoliveshopping extends Module
         return array(
             'form' => array(
                 'legend' => array(
-                    'title' => $state->isWelcome() ? $this->l('Set up this shop') : $this->l('Settings'),
+                    'title' => $state->isWelcome()
+                        ? sprintf($this->l('Connect %s'), $shopName)
+                        : sprintf($this->l('Settings for %s'), $shopName),
                     'icon' => 'icon-cogs',
                 ),
                 'description' => $state->isWelcome()
                     ? $this->l(
-                        'Confirm these choices, then connect this shop to the BEMO account that will sell your products.'
+                        'BEMO opens next. Sign in to the account where you want this shop to appear.'
                     )
                     : $this->l(
                         'Change how BEMO reads your catalog and how viewers check out.'
@@ -1027,7 +1038,7 @@ class Bemoliveshopping extends Module
                 'input' => $inputs,
                 'submit' => $state->showsConnectAction()
                     ? array(
-                        'title' => $this->l('Save and connect to BEMO'),
+                        'title' => sprintf($this->l('Connect %s to BEMO'), $shopName),
                         'name' => 'submitBemoActivateAccount',
                         'class' => 'btn btn-primary pull-right',
                         'icon' => 'process-icon-key',

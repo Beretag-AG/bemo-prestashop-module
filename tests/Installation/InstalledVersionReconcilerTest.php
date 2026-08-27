@@ -10,25 +10,25 @@ class InstalledVersionReconcilerTest extends TestCase
 {
     public function testRecordsReleaseAfterTheLastRequiredMigration()
     {
-        $versions = new InMemoryModuleVersionRepository('0.7.1');
-
-        self::assertTrue(
-            (new InstalledVersionReconciler($versions))->reconcile(
-                'bemoliveshopping',
-                '0.8.1'
-            )
-        );
-        self::assertSame(array('bemoliveshopping', '0.8.1'), $versions->recorded);
-    }
-
-    public function testKeepsTheCurrentReleaseUnchanged()
-    {
         $versions = new InMemoryModuleVersionRepository('0.8.1');
 
         self::assertTrue(
             (new InstalledVersionReconciler($versions))->reconcile(
                 'bemoliveshopping',
-                '0.8.1'
+                '0.8.2'
+            )
+        );
+        self::assertSame(array('bemoliveshopping', '0.8.2'), $versions->recorded);
+    }
+
+    public function testKeepsTheCurrentReleaseUnchanged()
+    {
+        $versions = new InMemoryModuleVersionRepository('0.8.2');
+
+        self::assertTrue(
+            (new InstalledVersionReconciler($versions))->reconcile(
+                'bemoliveshopping',
+                '0.8.2'
             )
         );
         self::assertNull($versions->recorded);
@@ -41,7 +41,7 @@ class InstalledVersionReconcilerTest extends TestCase
         self::assertFalse(
             (new InstalledVersionReconciler($versions))->reconcile(
                 'bemoliveshopping',
-                '0.8.1'
+                '0.8.2'
             )
         );
         self::assertNull($versions->recorded);
@@ -49,12 +49,12 @@ class InstalledVersionReconcilerTest extends TestCase
 
     public function testDoesNotApplyTheFallbackToAnotherRelease()
     {
-        $versions = new InMemoryModuleVersionRepository('0.8.1');
+        $versions = new InMemoryModuleVersionRepository('0.8.2');
 
         self::assertFalse(
             (new InstalledVersionReconciler($versions))->reconcile(
                 'bemoliveshopping',
-                '0.8.2'
+                '0.8.3'
             )
         );
         self::assertNull($versions->recorded);
