@@ -16,6 +16,8 @@ use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
 use Bemo\LiveShopping\Checkout\DbBuyLinkNonceRepository;
 use Bemo\LiveShopping\Checkout\CheckoutReadyBridge;
 use Bemo\LiveShopping\Installation\Installer;
+use Bemo\LiveShopping\Installation\InstalledVersionReconciler;
+use Bemo\LiveShopping\Installation\PrestaShopModuleVersionRepository;
 use Bemo\LiveShopping\Lock\DbShopLock;
 use Bemo\LiveShopping\Pairing\CurlPairingGateway;
 use Bemo\LiveShopping\Pairing\CurlPairingStatusGateway;
@@ -166,6 +168,14 @@ class Bemoliveshopping extends Module
         // AdminModules otherwise opens PrestaShop's generic documentation next
         // to this module's own setup instructions.
         $this->context->smarty->clearAssign('help_link');
+
+        if (!(new InstalledVersionReconciler(
+            new PrestaShopModuleVersionRepository()
+        ))->reconcile($this->name, self::VERSION)) {
+            $this->output .= $this->displayError(
+                $this->l('PrestaShop could not finish the BEMO update. Your shop data was not changed. Please try the update again or contact your shop administrator.')
+            );
+        }
 
         if (Shop::getContext() !== Shop::CONTEXT_SHOP) {
             return $this->renderShopOverview();
