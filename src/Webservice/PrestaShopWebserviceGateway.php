@@ -17,8 +17,6 @@ class PrestaShopWebserviceGateway implements WebserviceGatewayInterface
 
     public function createReadOnlyAccount($shopId, $key, array $permissions)
     {
-        $this->assertResourcesExist(array_keys($permissions));
-
         $account = new \WebserviceKey();
         $account->key = $key;
         $account->description = 'BEMO Live Shopping read-only integration';
@@ -29,7 +27,7 @@ class PrestaShopWebserviceGateway implements WebserviceGatewayInterface
             throw new RuntimeException('Unable to create the BEMO Webservice account.');
         }
 
-        if (!\WebserviceKey::setPermissionForAccount((int) $account->id, $permissions)) {
+        if (!$this->replacePermissions($account, $permissions)) {
             $account->delete();
             throw new RuntimeException('Unable to assign BEMO Webservice permissions.');
         }
@@ -67,14 +65,12 @@ class PrestaShopWebserviceGateway implements WebserviceGatewayInterface
 
     public function updatePermissions($accountId, array $permissions)
     {
-        $this->assertResourcesExist(array_keys($permissions));
-
         $account = new \WebserviceKey((int) $accountId);
         if (!\Validate::isLoadedObject($account)) {
             return false;
         }
 
-        return (bool) \WebserviceKey::setPermissionForAccount((int) $account->id, $permissions);
+        return $this->replacePermissions($account, $permissions);
     }
 
     public function deleteAccount($accountId)
@@ -90,16 +86,42 @@ class PrestaShopWebserviceGateway implements WebserviceGatewayInterface
         return (bool) $account->delete();
     }
 
-    private function assertResourcesExist(array $requiredResources)
+    private function replacePermissions($account, array $permissions)
     {
-        $availableResources = array_keys(\WebserviceRequest::getResources());
-        $missingResources = array_diff($requiredResources, $availableResources);
+        $allowedMethods = array('GET', 'HEAD');
+        $permissionRows = array();
 
-        if ($missingResources !== array()) {
-            throw new RuntimeException(
-                'Required Webservice resources are unavailable: ' . implode(', ', $missingResources)
+        foreach ($permissions as $resource => $methods) {
+            if (!in_array($resource, ReadOnlyPermissionMap::RESOURCES, true)) {
+                continue;
+            }
+            foreach ($methods as $method => $enabled) {
+                $method = strtoupper((string) $method);
+                if ($enabled && in_array($method, $allowedMethods, true)) {
+                    $permissionRows[] = array($resource, $method);
+                }
+            }
+        }
+
+        if ($permissionRows === array() || !$account->deleteAssociations()) {
+            return false;
+        }
+
+        $values = array();
+        foreach ($permissionRows as $permission) {
+            $values[] = sprintf(
+                "(NULL, '%s', '%s', %d)",
+                pSQL($permission[0]),
+                pSQL($permission[1]),
+                (int) $account->id
             );
         }
+
+        $sql = 'INSERT INTO `' . _DB_PREFIX_ . 'webservice_permission` '
+            . '(`id_webservice_permission`, `resource`, `method`, `id_webservice_account`) VALUES '
+            . implode(', ', $values);
+
+        return (bool) \Db::getInstance()->execute($sql);
     }
 
     private function sameEnabledMethods(array $actual, array $required)
