@@ -16,7 +16,14 @@ jobs:
       - run: bash scripts/package.sh
       - run: bash scripts/package.sh staging
       - run: bash tests/package-structure.sh
+      # Fixed-name copies let releases/latest/download serve the newest
+      # version without any caller knowing a version number.
+      - run: |
+          cp "dist/bemoliveshopping-${GITHUB_REF_NAME#v}.zip" dist/bemoliveshopping.zip
+          cp "dist/bemoliveshopping-${GITHUB_REF_NAME#v}-staging.zip" dist/bemoliveshopping-staging.zip
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/bemoliveshopping-*.zip
+          files: |
+            dist/bemoliveshopping-*.zip
+            dist/bemoliveshopping.zip
           generate_release_notes: true
