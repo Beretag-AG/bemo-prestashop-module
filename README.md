@@ -185,6 +185,21 @@ shipping, fulfillment, refunds, customer terms and privacy notices, and the
 legal or regulatory obligations of the storefront. Review checkout terms and
 seek appropriate legal advice before enabling a live shop.
 
+### Data exchanged with BEMO
+
+Pairing sends BEMO the shop name and URL, PrestaShop version, enabled language
+and currency codes, read-only Webservice key, and independent webhook and
+purchase-link secrets. Catalog access covers products, categories, variants,
+stock, prices, vouchers, shops, languages, currencies, and tax configuration.
+It excludes customers and orders.
+
+Product and configuration changes create signed notifications containing the
+shop ID, event type, resource type, resource ID, and event time. The module does
+not send checkout form fields, payment details, customer accounts, addresses,
+or completed order records to BEMO. The merchant should describe the catalog
+integration and BEMO as a recipient where its own privacy information requires
+that disclosure.
+
 ## Development
 
 The repository uses current PHP and Composer for dependency management while
@@ -260,3 +275,8 @@ than opening a public issue with sensitive details.
 Licensed under the [Academic Free License 3.0](LICENSE.md).
 
 Copyright © 2026 Beretag AG.
+
+The release archive also includes [NOTICE.md](NOTICE.md), which identifies the
+licensed work, source location, and bundled-dependency status. Installation or
+distribution requirements under AFL section 9 should be confirmed with the
+merchant's legal adviser or the distribution channel.

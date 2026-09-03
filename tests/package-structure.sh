@@ -15,6 +15,7 @@ for required in \
   bemoliveshopping/.htaccess \
   bemoliveshopping/config.xml \
   bemoliveshopping/LICENSE.md \
+  bemoliveshopping/NOTICE.md \
   bemoliveshopping/config/autoload.php \
   bemoliveshopping/config/distribution.php \
   bemoliveshopping/controllers/front/buy.php \
