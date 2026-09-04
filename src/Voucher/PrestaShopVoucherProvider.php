@@ -32,7 +32,7 @@ class PrestaShopVoucherProvider
             . ' LIMIT ' . self::MAX_VOUCHERS
         );
         if (!is_array($rows)) {
-            return array();
+            throw new \RuntimeException('Unable to read vouchers');
         }
 
         return array_map(function ($row) {

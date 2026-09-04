@@ -25,7 +25,11 @@ class BemoliveshoppingVouchersModuleFrontController extends ModuleFrontControlle
             $this->respond(401, array('error' => 'unauthorized'));
         }
 
-        $vouchers = (new PrestaShopVoucherProvider(Db::getInstance()))->listForShop($shopId);
+        try {
+            $vouchers = (new PrestaShopVoucherProvider(Db::getInstance()))->listForShop($shopId);
+        } catch (RuntimeException $error) {
+            $this->respond(500, array('error' => 'voucher_read_failed'));
+        }
         $this->respond(200, array('vouchers' => $vouchers));
     }
 

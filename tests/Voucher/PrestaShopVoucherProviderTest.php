@@ -36,12 +36,11 @@ class PrestaShopVoucherProviderTest extends TestCase
         self::assertStringNotContainsString('SELECT cr.*', $db->query);
     }
 
-    public function testReturnsAnEmptyListWhenTheDatabaseReadFails()
+    public function testThrowsWhenTheDatabaseReadFails()
     {
-        self::assertSame(
-            array(),
-            (new PrestaShopVoucherProvider(new VoucherDb(false)))->listForShop(7)
-        );
+        $this->expectException(\RuntimeException::class);
+
+        (new PrestaShopVoucherProvider(new VoucherDb(false)))->listForShop(7);
     }
 
     public function testFixtureMatchesTheExactResponseContract()
