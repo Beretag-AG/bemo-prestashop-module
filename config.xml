@@ -2,7 +2,7 @@
 <module>
   <name>bemoliveshopping</name>
   <displayName><![CDATA[BEMO Live Shopping]]></displayName>
-  <version><![CDATA[0.8.2]]></version>
+  <version><![CDATA[0.8.3]]></version>
   <description><![CDATA[Connect your shops to BEMO and choose what to sell in each live session.]]></description>
   <author><![CDATA[BEMO]]></author>
   <tab><![CDATA[advertising_marketing]]></tab>

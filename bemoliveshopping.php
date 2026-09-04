@@ -40,7 +40,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.8.2';
+    const VERSION = '0.8.3';
     const CRON_CONTROLLER = 'cron';
     const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
@@ -133,7 +133,7 @@ class Bemoliveshopping extends Module
     {
         return (new Installer(Db::getInstance()))->upgradeToVersion050()
             && $this->registerBemoHooks()
-            && $this->repairWebservicePermissions();
+            && $this->synchronizeWebservicePermissions();
     }
 
     public function upgradeToVersion060()
@@ -160,7 +160,12 @@ class Bemoliveshopping extends Module
     {
         return (new Installer(Db::getInstance()))->upgradeToVersion070()
             && $this->registerBemoHooks()
-            && $this->repairWebservicePermissions();
+            && $this->synchronizeWebservicePermissions();
+    }
+
+    public function upgradeToVersion083()
+    {
+        return $this->synchronizeWebservicePermissions();
     }
 
     public function getContent()
@@ -651,15 +656,12 @@ class Bemoliveshopping extends Module
         return true;
     }
 
-    /**
-     * Widens an already-provisioned key in place. Rotating it instead would
-     * break the BEMO connection that still holds the previous key, and a key
-     * that cannot be repaired is fixed by pairing the shop again.
-     */
-    private function repairWebservicePermissions()
+    /** Replaces existing key permissions without rotating the key BEMO holds. */
+    private function synchronizeWebservicePermissions()
     {
         $gateway = new PrestaShopWebserviceGateway();
         $permissions = (new ReadOnlyPermissionMap())->build();
+        $allSynchronized = true;
 
         foreach ((new DbConfigurationRepository(Db::getInstance()))->getWebserviceAccountIds() as $accountId) {
             try {
@@ -668,15 +670,16 @@ class Bemoliveshopping extends Module
                 $repaired = false;
             }
             if (!$repaired) {
+                $allSynchronized = false;
                 PrestaShopLogger::addLog(
-                    'BEMO could not widen the read-only Webservice permissions of account ' . (int) $accountId
+                    'BEMO could not synchronize the read-only Webservice permissions of account ' . (int) $accountId
                     . '. Connect the shop to BEMO again.',
                     2
                 );
             }
         }
 
-        return true;
+        return $allSynchronized;
     }
 
     /**

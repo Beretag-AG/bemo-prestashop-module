@@ -8,46 +8,7 @@ use PHPUnit\Framework\TestCase;
 
 class InstalledVersionReconcilerTest extends TestCase
 {
-    public function testRecordsReleaseAfterTheLastRequiredMigration()
-    {
-        $versions = new InMemoryModuleVersionRepository('0.8.1');
-
-        self::assertTrue(
-            (new InstalledVersionReconciler($versions))->reconcile(
-                'bemoliveshopping',
-                '0.8.2'
-            )
-        );
-        self::assertSame(array('bemoliveshopping', '0.8.2'), $versions->recorded);
-    }
-
-    public function testKeepsTheCurrentReleaseUnchanged()
-    {
-        $versions = new InMemoryModuleVersionRepository('0.8.2');
-
-        self::assertTrue(
-            (new InstalledVersionReconciler($versions))->reconcile(
-                'bemoliveshopping',
-                '0.8.2'
-            )
-        );
-        self::assertNull($versions->recorded);
-    }
-
-    public function testRefusesToSkipAnOlderMigration()
-    {
-        $versions = new InMemoryModuleVersionRepository('0.6.5');
-
-        self::assertFalse(
-            (new InstalledVersionReconciler($versions))->reconcile(
-                'bemoliveshopping',
-                '0.8.2'
-            )
-        );
-        self::assertNull($versions->recorded);
-    }
-
-    public function testDoesNotApplyTheFallbackToAnotherRelease()
+    public function testRefusesToRecordAReleaseWhoseMigrationHasNotRun()
     {
         $versions = new InMemoryModuleVersionRepository('0.8.2');
 
@@ -55,6 +16,45 @@ class InstalledVersionReconcilerTest extends TestCase
             (new InstalledVersionReconciler($versions))->reconcile(
                 'bemoliveshopping',
                 '0.8.3'
+            )
+        );
+        self::assertNull($versions->recorded);
+    }
+
+    public function testKeepsTheCurrentReleaseUnchanged()
+    {
+        $versions = new InMemoryModuleVersionRepository('0.8.3');
+
+        self::assertTrue(
+            (new InstalledVersionReconciler($versions))->reconcile(
+                'bemoliveshopping',
+                '0.8.3'
+            )
+        );
+        self::assertNull($versions->recorded);
+    }
+
+    public function testRefusesToSkipAnOlderMigration()
+    {
+        $versions = new InMemoryModuleVersionRepository('0.8.1');
+
+        self::assertFalse(
+            (new InstalledVersionReconciler($versions))->reconcile(
+                'bemoliveshopping',
+                '0.8.3'
+            )
+        );
+        self::assertNull($versions->recorded);
+    }
+
+    public function testDoesNotApplyTheFallbackToAnotherRelease()
+    {
+        $versions = new InMemoryModuleVersionRepository('0.8.3');
+
+        self::assertFalse(
+            (new InstalledVersionReconciler($versions))->reconcile(
+                'bemoliveshopping',
+                '0.8.4'
             )
         );
         self::assertNull($versions->recorded);

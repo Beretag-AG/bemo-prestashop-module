@@ -90,11 +90,14 @@ merchant claims the connection in the BEMO web application.
 ```json
 {
   "pairingToken": "base64url-128-bit-token",
+  "shopId": 1,
+  "shopName": "Merchant shop",
   "shopUrl": "https://merchant.example",
   "platformVersion": "8.1.7",
   "languageId": 1,
   "languages": ["en"],
   "currencies": ["EUR"],
+  "embeddedCheckoutReady": false,
   "webserviceKey": "32-character-key",
   "webhookSecret": "shop-to-bemo-secret",
   "buyLinkSecret": "bemo-to-shop-secret"
@@ -184,19 +187,14 @@ Only `GET` and `HEAD` are provisioned for:
 - `combinations`
 - `product_option_values`
 - `stock_availables`
-- `specific_prices`
-- `cart_rules`
-- `images`
-- `languages`
-- `currencies`
-- `shops`
-- `taxes`
-- `tax_rules`
 
-`orders` is deliberately excluded. Current sales-light policy counts checkout
-intent instead of pretending pushed order events form a reconciled revenue
-ledger.
+The authenticated module voucher route returns at most 100 rules associated
+with the current shop. Its database query excludes customer-bound rules and
+returns only the voucher ID, code, quantity, validity dates, and active state.
+The Webservice key has no `cart_rules`, `customers`, or `orders` permission.
+Current sales-light policy counts checkout intent instead of pretending pushed
+order events form a reconciled revenue ledger.
 
-Module versions 0.5.0 and 0.7.0 repair the permissions of an already-provisioned key
-during upgrade without rotating it, so an existing BEMO connection keeps
-working.
+Module versions 0.5.0, 0.7.0, and 0.8.3 synchronize the permissions of an
+already-provisioned key during upgrade without rotating it, so an existing
+BEMO connection keeps working.

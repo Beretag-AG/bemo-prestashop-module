@@ -6,6 +6,7 @@ if (!defined('_PS_VERSION_')) {
 
 use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
 use Bemo\LiveShopping\Checkout\ProductLinksResponse;
+use Bemo\LiveShopping\Security\WebserviceKeyAuthenticator;
 
 class BemoliveshoppingProductlinksModuleFrontController extends ModuleFrontController
 {
@@ -19,10 +20,9 @@ class BemoliveshoppingProductlinksModuleFrontController extends ModuleFrontContr
         $shopId = isset($this->context->shop->id) ? (int) $this->context->shop->id : 0;
         $configuration = new DbConfigurationRepository(Db::getInstance());
         $credentials = $configuration->getPairingCredentials($shopId);
-        $providedKey = $this->basicAuthenticationUser();
         if (!is_array($credentials)
             || !isset($credentials['webservice_key'])
-            || !hash_equals((string) $credentials['webservice_key'], $providedKey)) {
+            || !(new WebserviceKeyAuthenticator())->matches($credentials['webservice_key'], $_SERVER)) {
             $this->respond(401, array('error' => 'unauthorized'));
         }
 
@@ -53,34 +53,6 @@ class BemoliveshoppingProductlinksModuleFrontController extends ModuleFrontContr
             $configuration->isEmbeddedCheckoutRequested($shopId),
             Bemoliveshopping::VERSION
         ));
-    }
-
-    /**
-     * PHP-FPM and CGI never populate PHP_AUTH_USER, so the raw Basic header the
-     * PrestaShop Webservice dispatcher also reads is decoded as a fallback.
-     */
-    private function basicAuthenticationUser()
-    {
-        if (isset($_SERVER['PHP_AUTH_USER'])) {
-            return (string) $_SERVER['PHP_AUTH_USER'];
-        }
-
-        foreach (array('HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION') as $header) {
-            if (!isset($_SERVER[$header]) || !is_string($_SERVER[$header])) {
-                continue;
-            }
-            if (stripos($_SERVER[$header], 'basic ') !== 0) {
-                continue;
-            }
-            $decoded = base64_decode(substr($_SERVER[$header], 6), true);
-            if (!is_string($decoded) || strpos($decoded, ':') === false) {
-                continue;
-            }
-
-            return substr($decoded, 0, strpos($decoded, ':'));
-        }
-
-        return '';
     }
 
     private function respond($status, array $payload)

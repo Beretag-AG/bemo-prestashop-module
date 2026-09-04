@@ -1,0 +1,12 @@
+{
+  "vouchers": [
+    {
+      "externalVoucherId": 51,
+      "code": "LIVE10",
+      "quantity": 500,
+      "validFrom": 1800000000000,
+      "validTo": 1800086400000,
+      "active": true
+    }
+  ]
+}

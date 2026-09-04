@@ -26,19 +26,11 @@ class ReadOnlyPermissionMapTest extends TestCase
         sort($resources);
 
         self::assertSame(array(
-            'cart_rules',
             'categories',
             'combinations',
-            'currencies',
-            'images',
-            'languages',
             'product_option_values',
             'products',
-            'shops',
-            'specific_prices',
             'stock_availables',
-            'tax_rules',
-            'taxes',
         ), $resources);
     }
 }

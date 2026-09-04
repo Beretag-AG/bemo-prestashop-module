@@ -76,6 +76,7 @@ namespace {
 
 namespace Bemo\LiveShopping\Tests\Webservice {
     use Bemo\LiveShopping\Webservice\PrestaShopWebserviceGateway;
+    use Bemo\LiveShopping\Webservice\ReadOnlyPermissionMap;
     use PHPUnit\Framework\TestCase;
     use ReflectionMethod;
 
@@ -119,6 +120,34 @@ namespace Bemo\LiveShopping\Tests\Webservice {
             self::assertStringContainsString("'products', 'HEAD', 42", \Db::$queries[0]);
             self::assertStringNotContainsString('POST', \Db::$queries[0]);
             self::assertStringNotContainsString('unknown_resource', \Db::$queries[0]);
+        }
+
+        public function testReplacementContainsOnlyTheCurrentMinimalResources()
+        {
+            \Db::$queries = array();
+
+            self::assertTrue((new PrestaShopWebserviceGateway())->updatePermissions(
+                42,
+                (new ReadOnlyPermissionMap())->build()
+            ));
+
+            self::assertCount(1, \Db::$queries);
+            foreach (ReadOnlyPermissionMap::RESOURCES as $resource) {
+                self::assertStringContainsString("'" . $resource . "', 'GET', 42", \Db::$queries[0]);
+                self::assertStringContainsString("'" . $resource . "', 'HEAD', 42", \Db::$queries[0]);
+            }
+            foreach (array(
+                'cart_rules',
+                'specific_prices',
+                'images',
+                'languages',
+                'currencies',
+                'shops',
+                'taxes',
+                'tax_rules',
+            ) as $removedResource) {
+                self::assertStringNotContainsString("'" . $removedResource . "'", \Db::$queries[0]);
+            }
         }
 
         public function testMatchesThePermissionShapeReturnedByPrestashop()

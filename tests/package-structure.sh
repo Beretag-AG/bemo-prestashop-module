@@ -21,9 +21,11 @@ for required in \
   bemoliveshopping/controllers/front/buy.php \
   bemoliveshopping/controllers/front/cron.php \
   bemoliveshopping/controllers/front/productlinks.php \
+  bemoliveshopping/controllers/front/vouchers.php \
   bemoliveshopping/src/Checkout/index.php \
   bemoliveshopping/src/Pairing/index.php \
   bemoliveshopping/src/Presentation/index.php \
+  bemoliveshopping/src/Voucher/index.php \
   bemoliveshopping/src/Webhook/index.php \
   bemoliveshopping/views/index.php \
   bemoliveshopping/views/templates/index.php \
@@ -43,7 +45,8 @@ for required in \
   bemoliveshopping/upgrade/upgrade-0.6.3.php \
   bemoliveshopping/upgrade/upgrade-0.6.4.php \
   bemoliveshopping/upgrade/upgrade-0.6.5.php \
-  bemoliveshopping/upgrade/upgrade-0.7.0.php; do
+  bemoliveshopping/upgrade/upgrade-0.7.0.php \
+  bemoliveshopping/upgrade/upgrade-0.8.3.php; do
   if ! grep -Fx "$required" <<<"$entries" >/dev/null; then
     echo "Archive is missing $required." >&2
     exit 1

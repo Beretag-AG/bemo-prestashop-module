@@ -14,14 +14,6 @@ class ReadOnlyPermissionMap
         'categories',
         'combinations',
         'stock_availables',
-        'specific_prices',
-        'cart_rules',
-        'images',
-        'languages',
-        'currencies',
-        'shops',
-        'taxes',
-        'tax_rules',
     );
 
     public function build()

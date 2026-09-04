@@ -187,18 +187,60 @@ seek appropriate legal advice before enabling a live shop.
 
 ### Data exchanged with BEMO
 
-Pairing sends BEMO the shop name and URL, PrestaShop version, enabled language
-and currency codes, read-only Webservice key, and independent webhook and
-purchase-link secrets. Catalog access covers products, categories, variants,
-stock, prices, vouchers, shops, languages, currencies, and tax configuration.
-It excludes customers and orders.
+The pairing request sends BEMO these fields:
 
-Product and configuration changes create signed notifications containing the
-shop ID, event type, resource type, resource ID, and event time. The module does
-not send checkout form fields, payment details, customer accounts, addresses,
-or completed order records to BEMO. The merchant should describe the catalog
-integration and BEMO as a recipient where its own privacy information requires
-that disclosure.
+- shop ID, name, canonical URL, and PrestaShop version;
+- default language ID, enabled language codes, and enabled currency codes;
+- whether the shop's current settings are ready for embedded checkout;
+- a short-lived pairing token;
+- a read-only Webservice key; and
+- independent webhook-signing and purchase-link-signing secrets.
+
+While pairing is pending, status checks send only the short-lived pairing
+token. After pairing, the Webservice key authorizes `GET` and `HEAD` for
+products, categories, variants, variant option values, and stock. It has no
+access to PrestaShop's customer or order resources. BEMO also requests
+canonical product IDs and URLs, the embedded-checkout setting, and the module
+version through an authenticated module route.
+
+An authenticated voucher route returns at most 100 general shop voucher codes.
+It filters out customer-bound rules inside PrestaShop before returning the
+voucher ID, code, quantity, validity dates, and active state. The Webservice key
+does not authorize the broader `cart_rules` resource.
+
+Product, stock, price, voucher, and configuration changes create signed
+notifications. Every notification contains an event ID, event type, event time,
+shop ID and URL, resource type, and resource ID. Configuration notifications
+also contain the requested embedded-checkout setting and, when available, the
+module version.
+
+BEMO sends the module signed, short-lived purchase links. Current links contain
+a version, BEMO cart, connection and session IDs, issue and expiry times, a
+single-use nonce, and product or variant IDs with quantities. Legacy links can
+contain one BEMO product ID and one external product ID instead. These links do
+not contain customer identity, address, checkout-form, or payment data.
+
+The module does not send checkout form fields, payment details, customer
+accounts, addresses, or completed order records to BEMO. The merchant should
+describe the catalog integration and BEMO as a recipient where its own privacy
+information requires that disclosure.
+
+### Data stored by the module
+
+The module stores its Webservice key, webhook and purchase-link secrets,
+short-lived pairing token and timestamps, and private retry token in the shop's
+PrestaShop database. PrestaShop stores these values as plain database columns,
+so the merchant or host must protect database access and backups.
+
+Queued notifications remain in the module database until successful delivery.
+Permanently failed notifications remain for up to 30 days, and pending events
+may remain until delivery or queue-limit cleanup. For purchase-link replay
+protection, the module stores the shop ID, nonce, expiry time, and creation time
+until an ordinary cleanup run removes the expired entry.
+
+Disconnecting clears the pairing credentials and deletes the module-created
+Webservice account. Uninstalling deletes all module tables and removes every
+module-owned Webservice account.
 
 ## Development
 
