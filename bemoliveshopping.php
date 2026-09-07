@@ -40,7 +40,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.8.4';
+    const VERSION = '0.8.5';
     const CRON_CONTROLLER = 'cron';
     const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
@@ -166,6 +166,11 @@ class Bemoliveshopping extends Module
     public function upgradeToVersion083()
     {
         return $this->synchronizeWebservicePermissions();
+    }
+
+    public function upgradeToVersion085()
+    {
+        return true;
     }
 
     public function getContent()

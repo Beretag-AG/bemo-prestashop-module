@@ -13,7 +13,7 @@ class ProductLinksResponseTest extends TestCase
             'products' => array(),
             'configuration' => array(
                 'embeddedCheckoutRequested' => true,
-                'moduleVersion' => '0.8.4',
+                'moduleVersion' => '0.8.5',
                 'shopId' => 7,
                 'stockShopId' => 7,
                 'stockShopGroupId' => 0,
@@ -21,7 +21,7 @@ class ProductLinksResponseTest extends TestCase
         ), (new ProductLinksResponse())->compose(
             array(),
             true,
-            '0.8.4',
+            '0.8.5',
             array(
                 'shopId' => 7,
                 'stockShopId' => 7,

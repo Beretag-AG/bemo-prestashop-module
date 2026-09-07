@@ -53,6 +53,19 @@ for required in \
   fi
 done
 
+module_version="$(unzip -p "$artifact" bemoliveshopping/bemoliveshopping.php \
+  | sed -n "s/^[[:space:]]*const VERSION = '\([^']*\)';/\1/p")"
+terminal_upgrade="bemoliveshopping/upgrade/upgrade-${module_version}.php"
+terminal_function="function upgrade_module_${module_version//./_}("
+if [[ -z "$module_version" ]] || ! grep -Fx "$terminal_upgrade" <<<"$entries" >/dev/null; then
+  echo "Archive is missing the terminal upgrade for its advertised version." >&2
+  exit 1
+fi
+if ! unzip -p "$artifact" "$terminal_upgrade" | grep -F "$terminal_function" >/dev/null; then
+  echo "Terminal upgrade does not expose $terminal_function." >&2
+  exit 1
+fi
+
 if ! unzip -p "$artifact" bemoliveshopping/config.xml \
   | grep -F '<author><![CDATA[BEMO]]></author>' >/dev/null; then
   echo "Packaged module metadata must identify the author as BEMO." >&2

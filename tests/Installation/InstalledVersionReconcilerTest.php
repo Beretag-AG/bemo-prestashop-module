@@ -15,7 +15,7 @@ class InstalledVersionReconcilerTest extends TestCase
         self::assertFalse(
             (new InstalledVersionReconciler($versions))->reconcile(
                 'bemoliveshopping',
-                '0.8.4'
+                '0.8.5'
             )
         );
         self::assertNull($versions->recorded);
@@ -23,12 +23,12 @@ class InstalledVersionReconcilerTest extends TestCase
 
     public function testKeepsTheCurrentReleaseUnchanged()
     {
-        $versions = new InMemoryModuleVersionRepository('0.8.4');
+        $versions = new InMemoryModuleVersionRepository('0.8.5');
 
         self::assertTrue(
             (new InstalledVersionReconciler($versions))->reconcile(
                 'bemoliveshopping',
-                '0.8.4'
+                '0.8.5'
             )
         );
         self::assertNull($versions->recorded);
@@ -41,7 +41,7 @@ class InstalledVersionReconcilerTest extends TestCase
         self::assertFalse(
             (new InstalledVersionReconciler($versions))->reconcile(
                 'bemoliveshopping',
-                '0.8.4'
+                '0.8.5'
             )
         );
         self::assertNull($versions->recorded);
@@ -49,15 +49,15 @@ class InstalledVersionReconcilerTest extends TestCase
 
     public function testRecordsAPatchReleaseAfterTheLastMigration()
     {
-        $versions = new InMemoryModuleVersionRepository('0.8.3');
+        $versions = new InMemoryModuleVersionRepository('0.8.4');
 
         self::assertTrue(
             (new InstalledVersionReconciler($versions))->reconcile(
                 'bemoliveshopping',
-                '0.8.4'
+                '0.8.5'
             )
         );
-        self::assertSame(array('bemoliveshopping', '0.8.4'), $versions->recorded);
+        self::assertSame(array('bemoliveshopping', '0.8.5'), $versions->recorded);
     }
 }
 

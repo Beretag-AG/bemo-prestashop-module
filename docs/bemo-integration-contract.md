@@ -150,7 +150,7 @@ even for an empty product list:
   "products": [],
   "configuration": {
     "embeddedCheckoutRequested": false,
-    "moduleVersion": "0.8.4",
+    "moduleVersion": "0.8.5",
     "shopId": 7,
     "stockShopId": 0,
     "stockShopGroupId": 3
