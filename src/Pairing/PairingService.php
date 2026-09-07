@@ -80,7 +80,7 @@ class PairingService
         list($apiBaseUrl, $appBaseUrl) = $endpointPair;
 
         $payload = $this->shopDetails->get($shopId);
-        if (!$this->hasValidShopDetails($payload)) {
+        if (!$this->hasValidShopDetails($payload, $shopId)) {
             throw new PairingException(PairingException::SHOP_CONTEXT);
         }
 
@@ -191,12 +191,13 @@ class PairingService
             && strlen($credentials['buy_link_secret']) <= 256;
     }
 
-    private function hasValidShopDetails($details)
+    private function hasValidShopDetails($details, $shopId)
     {
         if (!is_array($details)
             || !isset($details['shopId'], $details['shopName'], $details['shopUrl'], $details['platformVersion'], $details['languageId'], $details['languages'], $details['currencies'], $details['embeddedCheckoutReady'])
             || !is_int($details['shopId'])
             || $details['shopId'] <= 0
+            || $details['shopId'] !== (int) $shopId
             || !is_string($details['shopName'])
             || trim($details['shopName']) === ''
             || strlen($details['shopName']) > 255

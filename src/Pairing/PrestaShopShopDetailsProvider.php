@@ -112,33 +112,10 @@ class PrestaShopShopDetailsProvider implements ShopDetailsProviderInterface
             (int) $shop->id_shop_group,
             $shopId
         );
-        $currencies = array();
 
-        foreach (\Currency::getCurrenciesByIdShop($shopId) as $currency) {
-            $row = is_object($currency) ? get_object_vars($currency) : $currency;
-            if (!is_array($row) || empty($row['iso_code'])) {
-                continue;
-            }
-
-            if ((isset($row['active']) && !(bool) $row['active'])
-                || (isset($row['deleted']) && (bool) $row['deleted'])) {
-                continue;
-            }
-
-            $id = isset($row['id_currency'])
-                ? (int) $row['id_currency']
-                : (isset($row['id']) ? (int) $row['id'] : 0);
-            $isoCode = strtoupper($row['iso_code']);
-            if (!preg_match('/^[A-Z]{3}$/', $isoCode)) {
-                continue;
-            }
-            if ($id === $defaultCurrencyId) {
-                array_unshift($currencies, $isoCode);
-            } else {
-                $currencies[] = $isoCode;
-            }
-        }
-
-        return array_values(array_unique($currencies));
+        return (new ShopCurrencies())->activeIsoCodes(
+            \Currency::getCurrenciesByIdShop($shopId),
+            $defaultCurrencyId
+        );
     }
 }

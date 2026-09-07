@@ -119,7 +119,49 @@ class PairingServiceTest extends TestCase
         self::assertSame(0, $configuration->markCalls);
     }
 
-    private function service($configuration, $setup, $gateway, $developerMode = true)
+    public function testRejectsDetailsForAnotherShopBeforeProvisioning()
+    {
+        $setup = new PairingSetup();
+        $shopDetails = new FixedShopDetails();
+        $shopDetails->shopId = 8;
+
+        try {
+            $this->service(
+                new PairingConfiguration(),
+                $setup,
+                new CapturingPairingGateway(),
+                true,
+                $shopDetails
+            )->start(7);
+            self::fail('Expected mismatched shop details to fail.');
+        } catch (PairingException $exception) {
+            self::assertSame(PairingException::SHOP_CONTEXT, $exception->getReason());
+            self::assertSame(array(), $setup->calls);
+        }
+    }
+
+    public function testRejectsMissingDefaultCurrencyBeforeProvisioning()
+    {
+        $setup = new PairingSetup();
+        $shopDetails = new FixedShopDetails();
+        $shopDetails->currencies = array();
+
+        try {
+            $this->service(
+                new PairingConfiguration(),
+                $setup,
+                new CapturingPairingGateway(),
+                true,
+                $shopDetails
+            )->start(7);
+            self::fail('Expected missing shop currency to fail.');
+        } catch (PairingException $exception) {
+            self::assertSame(PairingException::SHOP_CONTEXT, $exception->getReason());
+            self::assertSame(array(), $setup->calls);
+        }
+    }
+
+    private function service($configuration, $setup, $gateway, $developerMode = true, $shopDetails = null)
     {
         $normalizer = new EndpointNormalizer();
 
@@ -127,7 +169,7 @@ class PairingServiceTest extends TestCase
             $configuration,
             $setup,
             $gateway,
-            new FixedShopDetails(),
+            $shopDetails === null ? new FixedShopDetails() : $shopDetails,
             new SecretGenerator(),
             $normalizer,
             new EndpointPolicy($normalizer, $developerMode),
@@ -232,16 +274,20 @@ class CapturingPairingGateway implements PairingGatewayInterface
 
 class FixedShopDetails implements ShopDetailsProviderInterface
 {
+    public $shopId = 7;
+
+    public $currencies = array('EUR', 'CHF');
+
     public function get($shopId)
     {
         return array(
-            'shopId' => (int) $shopId,
+            'shopId' => $this->shopId,
             'shopName' => 'Germany store',
             'shopUrl' => 'https://merchant.example/shop',
             'platformVersion' => '8.2.6',
             'languageId' => 2,
             'languages' => array('de', 'en'),
-            'currencies' => array('EUR', 'CHF'),
+            'currencies' => $this->currencies,
             'embeddedCheckoutReady' => true,
         );
     }

@@ -48,4 +48,15 @@ class WebserviceKeyAuthenticatorTest extends TestCase
             'missing colon' => array('expected-key', array('HTTP_AUTHORIZATION' => 'Basic ' . base64_encode('expected-key'))),
         );
     }
+
+    public function testOptionalShopMustMatchTheStorefrontContext()
+    {
+        $authenticator = new WebserviceKeyAuthenticator();
+
+        self::assertTrue($authenticator->matchesShop(7, null));
+        self::assertTrue($authenticator->matchesShop(7, '7'));
+        self::assertFalse($authenticator->matchesShop(7, '8'));
+        self::assertFalse($authenticator->matchesShop(7, '7oops'));
+        self::assertFalse($authenticator->matchesShop(7, array('7')));
+    }
 }

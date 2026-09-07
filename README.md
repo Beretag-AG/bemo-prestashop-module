@@ -87,6 +87,23 @@ To install it in a development or staging shop:
    account that should sell its products. Until it is claimed, the page offers
    **Restart connection** to request a fresh claim link.
 
+For a multishop installation, install or update the module once, then open its
+configuration page. The first page lists every shop and its BEMO connection
+status. Open and connect each shop that should appear in BEMO. Each connection
+has its own catalog key, webhook secret, purchase-link secret, endpoints, and
+checkout choice.
+
+A BEMO live session selects one connected shop. BEMO reads products, prices,
+languages, and currencies only in that shop's context. When the shop group
+shares inventory, BEMO follows PrestaShop's group stock scope while keeping the
+selected shop as the catalog and checkout context.
+
+Shared-inventory support requires module 0.8.4 or newer. If an older BEMO
+connection does not show a shop ID, connect that shop again after updating.
+Previously disconnected products without a saved shop identity must be imported
+again so BEMO can assign them to the correct shop. Changes to shared inventory
+may reach sibling shops on their next scheduled catalog refresh.
+
 The configuration page follows the connection: a first-run welcome and the
 setup choices before connecting, a claim status while BEMO has not claimed the
 shop yet, and the connection, catalog sync, settings, and disconnect panels once

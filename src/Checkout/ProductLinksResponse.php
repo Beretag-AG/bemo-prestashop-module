@@ -8,13 +8,16 @@ if (!defined('_PS_VERSION_')) {
 
 class ProductLinksResponse
 {
-    public function compose(array $products, $embeddedCheckoutRequested, $moduleVersion)
+    public function compose(array $products, $embeddedCheckoutRequested, $moduleVersion, array $catalogScope)
     {
         return array(
             'products' => $products,
-            'configuration' => array(
-                'embeddedCheckoutRequested' => (bool) $embeddedCheckoutRequested,
-                'moduleVersion' => (string) $moduleVersion,
+            'configuration' => array_merge(
+                array(
+                    'embeddedCheckoutRequested' => (bool) $embeddedCheckoutRequested,
+                    'moduleVersion' => (string) $moduleVersion,
+                ),
+                $catalogScope
             ),
         );
     }

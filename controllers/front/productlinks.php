@@ -4,8 +4,9 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
+use Bemo\LiveShopping\Checkout\CatalogScope;
 use Bemo\LiveShopping\Checkout\ProductLinksResponse;
+use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
 use Bemo\LiveShopping\Security\WebserviceKeyAuthenticator;
 
 class BemoliveshoppingProductlinksModuleFrontController extends ModuleFrontController
@@ -20,11 +21,25 @@ class BemoliveshoppingProductlinksModuleFrontController extends ModuleFrontContr
         $shopId = isset($this->context->shop->id) ? (int) $this->context->shop->id : 0;
         $configuration = new DbConfigurationRepository(Db::getInstance());
         $credentials = $configuration->getPairingCredentials($shopId);
+        $authenticator = new WebserviceKeyAuthenticator();
         if (!is_array($credentials)
             || !isset($credentials['webservice_key'])
-            || !(new WebserviceKeyAuthenticator())->matches($credentials['webservice_key'], $_SERVER)) {
+            || !$authenticator->matches($credentials['webservice_key'], $_SERVER)) {
             $this->respond(401, array('error' => 'unauthorized'));
         }
+        if (!$authenticator->matchesShop($shopId, Tools::getValue('id_shop', null))) {
+            $this->respond(400, array('error' => 'shop_context_mismatch'));
+        }
+
+        $shopGroup = $this->context->shop->getGroup();
+        if (!Validate::isLoadedObject($shopGroup)) {
+            $this->respond(500, array('error' => 'shop_context_unavailable'));
+        }
+        $catalogScope = new CatalogScope(
+            $shopId,
+            (int) $shopGroup->id,
+            (bool) $shopGroup->share_stock
+        );
 
         $rawIds = Tools::getValue('ids', '');
         $ids = array_values(array_unique(array_filter(array_map('intval', explode(',', (string) $rawIds)), function ($id) {
@@ -51,7 +66,8 @@ class BemoliveshoppingProductlinksModuleFrontController extends ModuleFrontContr
         $this->respond(200, (new ProductLinksResponse())->compose(
             $products,
             $configuration->isEmbeddedCheckoutRequested($shopId),
-            Bemoliveshopping::VERSION
+            Bemoliveshopping::VERSION,
+            $catalogScope->details()
         ));
     }
 

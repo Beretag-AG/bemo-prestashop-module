@@ -19,6 +19,23 @@ class WebserviceKeyAuthenticator
         return is_string($providedKey) && hash_equals($expectedKey, $providedKey);
     }
 
+    public function matchesShop($expectedShopId, $requestedShopId)
+    {
+        if ($requestedShopId === null) {
+            return true;
+        }
+        if (is_int($requestedShopId)) {
+            return $requestedShopId === (int) $expectedShopId;
+        }
+        if (!is_string($requestedShopId)
+            || !preg_match('/^[1-9][0-9]*$/D', $requestedShopId)) {
+            return false;
+        }
+
+        return (string) (int) $requestedShopId === $requestedShopId
+            && (int) $requestedShopId === (int) $expectedShopId;
+    }
+
     private function providedKey(array $server)
     {
         if (isset($server['PHP_AUTH_USER']) && is_string($server['PHP_AUTH_USER'])) {

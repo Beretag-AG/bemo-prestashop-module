@@ -90,8 +90,8 @@ merchant claims the connection in the BEMO web application.
 ```json
 {
   "pairingToken": "base64url-128-bit-token",
-  "shopId": 1,
-  "shopName": "Merchant shop",
+  "shopId": 7,
+  "shopName": "Germany store",
   "shopUrl": "https://merchant.example",
   "platformVersion": "8.1.7",
   "languageId": 1,
@@ -142,10 +142,34 @@ token-authenticated retry URL remains available for a host that wants an
 additional local retry schedule.
 
 An authenticated product-link response also returns the current embedded
-checkout request and module version, even for an empty product list. BEMO uses
-that value as the reconciliation backstop. A `configuration.updated` event in
-the durable outbox is the optional fast path. It uses the normal event envelope
-with `resourceType` set to `configuration` and `resourceId` set to the shop ID.
+checkout request, module version, selected shop ID, and PrestaShop stock scope,
+even for an empty product list:
+
+```json
+{
+  "products": [],
+  "configuration": {
+    "embeddedCheckoutRequested": false,
+    "moduleVersion": "0.8.4",
+    "shopId": 7,
+    "stockShopId": 0,
+    "stockShopGroupId": 3
+  }
+}
+```
+
+`shopId` is always the storefront shop selected by the request host. BEMO uses
+it as `id_shop` for catalog, price, and product-link requests. For a shop group
+with shared stock, `stockShopId` is `0` and `stockShopGroupId` is the group ID.
+Without shared stock, `stockShopId` is the selected shop and
+`stockShopGroupId` is `0`. Stock reads filter on both values. An optional
+`id_shop` query on the product-link or voucher request must equal the storefront
+shop or the module returns `400 shop_context_mismatch`.
+
+BEMO uses this response as the reconciliation backstop. A
+`configuration.updated` event in the durable outbox is the optional fast path.
+It uses the normal event envelope with `resourceType` set to `configuration`
+and `resourceId` set to the shop ID.
 
 The committed contract suite includes JSON fixtures for pairing, every webhook
 event, an exact-byte webhook HMAC vector, and a golden signed buy-link token.

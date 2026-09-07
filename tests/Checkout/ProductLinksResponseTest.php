@@ -13,8 +13,20 @@ class ProductLinksResponseTest extends TestCase
             'products' => array(),
             'configuration' => array(
                 'embeddedCheckoutRequested' => true,
-                'moduleVersion' => '0.7.0',
+                'moduleVersion' => '0.8.4',
+                'shopId' => 7,
+                'stockShopId' => 7,
+                'stockShopGroupId' => 0,
             ),
-        ), (new ProductLinksResponse())->compose(array(), true, '0.7.0'));
+        ), (new ProductLinksResponse())->compose(
+            array(),
+            true,
+            '0.8.4',
+            array(
+                'shopId' => 7,
+                'stockShopId' => 7,
+                'stockShopGroupId' => 0,
+            )
+        ));
     }
 }

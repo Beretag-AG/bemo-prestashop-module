@@ -40,7 +40,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.8.3';
+    const VERSION = '0.8.4';
     const CRON_CONTROLLER = 'cron';
     const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
@@ -227,11 +227,17 @@ class Bemoliveshopping extends Module
                 $this->isDeveloperMode()
             );
             $status = $this->connectionStatusBadge($state);
+            $shopModel = new Shop($shopId);
+            $storefrontUrl = Validate::isLoadedObject($shopModel)
+                ? $shopModel->getBaseURL(true, true)
+                : '';
             $shops[] = array(
+                'shopId' => $shopId,
                 'name' => (string) $shop['name'],
+                'storefrontUrl' => $storefrontUrl,
                 'status' => $status[0],
                 'badge' => $status[1],
-                'url' => $this->shopConfigurationUrl($shopId),
+                'configurationUrl' => $this->shopConfigurationUrl($shopId),
                 'action' => $state->isConnected()
                     ? $this->l('Manage shop')
                     : ($state->isWaiting()

@@ -19,10 +19,14 @@ class BemoliveshoppingVouchersModuleFrontController extends ModuleFrontControlle
 
         $shopId = isset($this->context->shop->id) ? (int) $this->context->shop->id : 0;
         $credentials = (new DbConfigurationRepository(Db::getInstance()))->getPairingCredentials($shopId);
+        $authenticator = new WebserviceKeyAuthenticator();
         if (!is_array($credentials)
             || !isset($credentials['webservice_key'])
-            || !(new WebserviceKeyAuthenticator())->matches($credentials['webservice_key'], $_SERVER)) {
+            || !$authenticator->matches($credentials['webservice_key'], $_SERVER)) {
             $this->respond(401, array('error' => 'unauthorized'));
+        }
+        if (!$authenticator->matchesShop($shopId, Tools::getValue('id_shop', null))) {
+            $this->respond(400, array('error' => 'shop_context_mismatch'));
         }
 
         try {
