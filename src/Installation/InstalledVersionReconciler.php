@@ -8,7 +8,7 @@ if (!defined('_PS_VERSION_')) {
 
 class InstalledVersionReconciler
 {
-    const RELEASE_VERSION = '0.8.5';
+    const RELEASE_VERSION = '0.8.6';
     const LAST_MIGRATION_VERSION = '0.8.3';
 
     /** @var ModuleVersionRepositoryInterface */

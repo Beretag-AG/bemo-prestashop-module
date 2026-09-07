@@ -22,6 +22,8 @@ for required in \
   bemoliveshopping/controllers/front/cron.php \
   bemoliveshopping/controllers/front/productlinks.php \
   bemoliveshopping/controllers/front/vouchers.php \
+  bemoliveshopping/src/Installation/ModuleUpgradeRecovery.php \
+  bemoliveshopping/views/templates/admin/pending-update.tpl \
   bemoliveshopping/src/Checkout/index.php \
   bemoliveshopping/src/Pairing/index.php \
   bemoliveshopping/src/Presentation/index.php \

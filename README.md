@@ -87,6 +87,16 @@ To install it in a development or staging shop:
    account that should sell its products. Until it is claimed, the page offers
    **Restart connection** to request a fresh claim link.
 
+If an update upload stalls or Module Manager reports an error after extracting
+the ZIP, let that request finish, then open **BEMO Live Shopping → Configure**
+from its action menu. Starting with 0.8.6, **Finish BEMO update** can recover
+updates from 0.8.2 or newer without scanning other modules. It runs BEMO's own
+pending upgrade scripts and keeps existing connections and settings. A failed
+step can be retried; the module never marks an unfinished migration complete.
+This recovers BEMO after a failed upload. It does not repair errors in other
+modules or PrestaShop's general uploader. Do not uninstall or reset BEMO to
+recover an update, as that removes its settings and catalog credentials.
+
 For a multishop installation, install or update the module once, then open its
 configuration page. The first page lists every shop and its BEMO connection
 status. Open and connect each shop that should appear in BEMO. Each connection

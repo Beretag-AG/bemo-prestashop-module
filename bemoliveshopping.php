@@ -17,6 +17,7 @@ use Bemo\LiveShopping\Checkout\DbBuyLinkNonceRepository;
 use Bemo\LiveShopping\Checkout\CheckoutReadyBridge;
 use Bemo\LiveShopping\Installation\Installer;
 use Bemo\LiveShopping\Installation\InstalledVersionReconciler;
+use Bemo\LiveShopping\Installation\ModuleUpgradeRecovery;
 use Bemo\LiveShopping\Installation\PrestaShopModuleVersionRepository;
 use Bemo\LiveShopping\Lock\DbShopLock;
 use Bemo\LiveShopping\Pairing\CurlPairingGateway;
@@ -40,7 +41,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.8.5';
+    const VERSION = '0.8.6';
     const CRON_CONTROLLER = 'cron';
     const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
@@ -173,22 +174,46 @@ class Bemoliveshopping extends Module
         return true;
     }
 
+    public function upgradeToVersion086()
+    {
+        return true;
+    }
+
     public function getContent()
     {
         // AdminModules otherwise opens PrestaShop's generic documentation next
         // to this module's own setup instructions.
         $this->context->smarty->clearAssign('help_link');
 
+        if (Tools::isSubmit('submitBemoFinishUpdate')) {
+            $token = Tools::getValue('bemo_upgrade_token');
+            if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'POST'
+                || !is_string($token) || !hash_equals(Tools::getAdminTokenLite('AdminModules'), $token)
+                || !Validate::isLoadedObject($this->context->employee)
+                || !$this->getPermission('configure')) {
+                return $this->displayError($this->l('You do not have permission to finish this update. Reload the page and try again.'));
+            }
+            try {
+                $finished = (new ModuleUpgradeRecovery(
+                    new PrestaShopModuleVersionRepository(),
+                    new DbShopLock(Db::getInstance())
+                ))->finish($this, self::VERSION);
+            } catch (Throwable $exception) {
+                $finished = false;
+            }
+            $this->output .= $finished
+                ? $this->displayConfirmation($this->l('BEMO update completed. Your existing shop connections and settings are preserved.'))
+                : $this->displayError($this->l('BEMO could not finish the update. Completed steps are saved. Please retry or contact BEMO support.'));
+        }
+
         if (!(new InstalledVersionReconciler(
             new PrestaShopModuleVersionRepository()
         ))->reconcile($this->name, self::VERSION)) {
-            $this->output .= $this->displayError(
-                $this->l('PrestaShop could not finish the BEMO update. Your shop data was not changed. Please try the update again or contact your shop administrator.')
-            );
+            return $this->output . $this->renderPendingUpdate();
         }
 
         if (Shop::getContext() !== Shop::CONTEXT_SHOP) {
-            return $this->renderShopOverview();
+            return $this->output . $this->renderShopOverview();
         }
 
         if (Tools::isSubmit('submitBemoActivateAccount')) {
@@ -214,6 +239,24 @@ class Bemoliveshopping extends Module
             . $this->renderCatalogSyncPanel($state)
             . $this->renderConfigurationForm($state)
             . $this->renderDisconnectPanel($state);
+    }
+
+    private function renderPendingUpdate()
+    {
+        $installedVersion = (new PrestaShopModuleVersionRepository())->current($this->name);
+        if (!is_string($installedVersion) || version_compare($installedVersion, '0.8.2', '<')) {
+            return $this->displayError($this->l('This installed version needs the standard PrestaShop module upgrade. Contact BEMO support if that update fails.'));
+        }
+        $this->context->smarty->assign(array(
+            'bemoUpdateTitle' => $this->l('Finish your BEMO update'),
+            'bemoUpdateExplanation' => $this->l('The new files are uploaded, but PrestaShop has not finished updating BEMO. Finish the update here to run only BEMO’s pending update steps for your shops.'),
+            'bemoUpdatePreservation' => $this->l('Your shop connections and settings are preserved. Products, orders, and other modules are not changed.'),
+            'bemoUpdateAction' => AdminController::$currentIndex . '&configure=' . $this->name . '&token=' . Tools::getAdminTokenLite('AdminModules'),
+            'bemoUpdateToken' => Tools::getAdminTokenLite('AdminModules'),
+            'bemoUpdateButton' => $this->l('Finish BEMO update'),
+        ));
+
+        return $this->display(__FILE__, 'views/templates/admin/pending-update.tpl');
     }
 
     private function renderShopOverview()
