@@ -99,7 +99,7 @@ class ConfigurationPageState
 
     public function showsRestartAction()
     {
-        return $this->isWaiting();
+        return $this->isWaiting() || $this->isConnected();
     }
 
     public function showsDisconnectPanel()

@@ -135,6 +135,14 @@ To stop the integration, open **BEMO Live Shopping → Configure** and use the
 **Disconnect from BEMO** panel at the bottom of the page. That deletes the module-created Webservice key and
 clears the stored credentials for the current shop.
 
+### Reconnecting after a BEMO disconnect
+
+In the module settings, choose the affected shop and select **Reconnect to BEMO**.
+Sign in to the BEMO account that should own the shop. You do not need to disconnect
+or delete the catalog key first. **Setup completed** records a previous successful
+setup; check BEMO for the current connection and catalog sync status.
+
+
 ## Embedded checkout
 
 BEMO can keep the PrestaShop cart and checkout inside the live session, but the

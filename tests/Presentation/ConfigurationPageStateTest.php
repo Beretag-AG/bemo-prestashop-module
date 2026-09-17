@@ -49,7 +49,7 @@ class ConfigurationPageStateTest extends TestCase
         }
     }
 
-    public function testAClaimedShopSeesItsHealthAndTheDisconnectPanel()
+    public function testAClaimedShopCanReconnectWithoutDisconnecting()
     {
         $configuration = new StubConfigurationRepository();
         $configuration->approved = true;
@@ -62,7 +62,7 @@ class ConfigurationPageStateTest extends TestCase
         self::assertTrue($state->showsCatalogSyncPanel());
         self::assertTrue($state->showsDisconnectPanel());
         self::assertFalse($state->showsConnectAction());
-        self::assertFalse($state->showsRestartAction());
+        self::assertTrue($state->showsRestartAction());
     }
 
     public function testEndpointFieldsAreDeveloperModeOnlyInEveryStep()
