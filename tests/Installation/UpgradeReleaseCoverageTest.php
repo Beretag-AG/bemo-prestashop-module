@@ -14,7 +14,7 @@ class UpgradeReleaseCoverageTest extends TestCase
         preg_match("/const VERSION = '([^']+)';/", $moduleSource, $versionMatch);
         $releaseVersion = $versionMatch[1];
 
-        self::assertSame('0.8.6', $releaseVersion);
+        self::assertSame('0.8.7', $releaseVersion);
         self::assertStringContainsString(
             '<version><![CDATA[' . $releaseVersion . ']]></version>',
             file_get_contents($root . '/config.xml')

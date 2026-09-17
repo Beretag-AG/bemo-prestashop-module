@@ -41,6 +41,27 @@ class PairingServiceTest extends TestCase
         );
     }
 
+    public function testCompletedSetupCanCreateAFreshPairingWithItsExistingCredentials()
+    {
+        $configuration = new PairingConfiguration();
+        $configuration->status = 'connected';
+        $credentials = $configuration->credentials;
+        $gateway = new CapturingPairingGateway();
+
+        $claimUrl = $this->service($configuration, new PairingSetup(), $gateway)->start(7);
+
+        self::assertSame(1, $configuration->beginCalls);
+        self::assertSame(1, $configuration->markCalls);
+        self::assertSame($credentials, $configuration->credentials);
+        self::assertSame($credentials['webservice_key'], $gateway->payload['webserviceKey']);
+        self::assertSame($credentials['webhook_secret'], $gateway->payload['webhookSecret']);
+        self::assertSame($credentials['buy_link_secret'], $gateway->payload['buyLinkSecret']);
+        self::assertSame(
+            'https://bemo.now/settings/creator/integrations?pair=' . $gateway->payload['pairingToken'],
+            $claimUrl
+        );
+    }
+
     public function testRejectsUntrustedProductionEndpointBeforeProvisioning()
     {
         $configuration = new PairingConfiguration();
@@ -183,6 +204,7 @@ class PairingServiceTest extends TestCase
 
 class PairingConfiguration implements ConfigurationRepositoryInterface
 {
+    public $status = 'ready_to_pair';
     public $apiBaseUrl = 'https://api.example.com';
     public $appBaseUrl = 'https://bemo.now';
     public $attempt;
@@ -203,7 +225,7 @@ class PairingConfiguration implements ConfigurationRepositoryInterface
     public function isWebserviceAccessApproved($shopId) { return true; }
     public function isEmbeddedCheckoutRequested($shopId) { return false; }
     public function getCheckoutLanding($shopId) { return CheckoutLanding::CART; }
-    public function getConnectionStatus($shopId) { return 'ready_to_pair'; }
+    public function getConnectionStatus($shopId) { return $this->status; }
     public function getCronToken($shopId) { return null; }
     public function saveCronToken($shopId, $cronToken) { return true; }
     public function getWebserviceAccountId($shopId) { return 73; }

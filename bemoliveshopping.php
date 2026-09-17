@@ -41,7 +41,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.8.6';
+    const VERSION = '0.8.7';
     const CRON_CONTROLLER = 'cron';
     const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
@@ -831,7 +831,7 @@ class Bemoliveshopping extends Module
                 ? $this->l(
                     'Finish in the BEMO account where you want this shop to appear.'
                 )
-                : '',
+                : $this->l('Setup was completed previously. Check BEMO for the current connection status. If BEMO says disconnected, reconnect here and sign in to the same BEMO account.'),
             'bemoRows' => array(
                 array(
                     'label' => $this->l('Status'),
@@ -858,7 +858,9 @@ class Bemoliveshopping extends Module
                     'link' => true,
                 ),
             ),
-            'bemoRestartLabel' => $state->showsRestartAction() ? $this->l('Restart connection') : '',
+            'bemoRestartLabel' => $state->showsRestartAction()
+                ? ($state->isConnected() ? $this->l('Reconnect to BEMO') : $this->l('Restart connection'))
+                : '',
             'bemoRefreshWaiting' => $state->isWaiting(),
             'bemoFormAction' => $this->configurationFormAction(),
             // Developer mode is the only case where the endpoints are editable,
@@ -950,7 +952,7 @@ class Bemoliveshopping extends Module
         }
 
         if ($state->isConnected()) {
-            return array($this->l('Connected'), 'label-success');
+            return array($this->l('Setup completed'), 'label-info');
         }
 
         return array($this->l('Not connected'), 'label-default');
