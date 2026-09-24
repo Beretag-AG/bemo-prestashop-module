@@ -145,66 +145,74 @@ setup; check BEMO for the current connection and catalog sync status.
 
 ## Embedded checkout
 
-BEMO can keep the PrestaShop cart and checkout inside the live session, but the
-shop must explicitly request a cross-site iframe and pass BEMO's staging review.
-Otherwise the shop's native cart opens in a new tab.
+BEMO can keep the PrestaShop cart and checkout inside the live session. The
+merchant opts in with **Show checkout inside BEMO** in the module settings.
+BEMO then checks the shop automatically and turns embedded checkout on only
+when the check passes. Otherwise the shop's native cart opens in a new tab.
 
-Before pairing a shop for embedded checkout:
+From 0.9.0 the module sends the required headers itself, so most shops need no
+server changes:
 
-1. Serve the complete storefront and checkout over HTTPS.
-2. In **Advanced Parameters → Administration**, set **Cookie SameSite** to
-   **None**. The exact label can vary slightly by PrestaShop version.
-3. Remove `X-Frame-Options: SAMEORIGIN` or `DENY` from checkout responses.
-4. If the shop sends Content Security Policy, allow the relevant BEMO app
-   origins in `frame-ancestors`, for example `https://bemo.now` and
-   `https://beta.bemo.now` during staging.
-5. Pair the shop again after changing these settings. Readiness is captured at
-   pairing time; BEMO does not weaken shop headers or cookie policy remotely.
-6. Complete a real sandbox order for every enabled payment method in desktop
-   Chrome and mobile Safari. A payment provider, 3-D Secure challenge, CDN, or
-   browser privacy policy can still require top-level navigation, so BEMO
-   always provides **Open in new tab** as a fallback.
+- On storefront pages it sends
+  `Content-Security-Policy: frame-ancestors 'self' <BEMO app origin>`.
+  Browsers ignore `X-Frame-Options` when `frame-ancestors` is present, so an
+  existing `SAMEORIGIN` header can stay and every other site stays blocked.
+  The origin comes from the archive's environment: the production archive
+  admits only `https://bemo.now`, the staging archive only
+  `https://beta.bemo.now`. PrestaShop developer mode uses the custom app URL
+  it paired with.
+- Only for requests the browser marks as a cross-site frame
+  (`Sec-Fetch-Dest: iframe`, `Sec-Fetch-Site: cross-site`) over HTTPS, it
+  sends the PrestaShop session cookie with `Secure; SameSite=None;
+  Partitioned`. That cookie lives in its own browser partition, so normal
+  visits to the shop keep their existing cookie.
 
-Quickly inspect the public response headers (replace the URL with the real
-checkout URL):
+Both only apply after the merchant opts in. BEMO re-checks the shop at
+pairing, after opt-in, daily, and whenever the creator presses **Sync now**.
+When something still blocks it, BEMO's shop settings show the reason in plain
+language plus a copyable brief for the merchant's developer or hosting
+support.
+
+What can still block embedded checkout, and needs the host or developer:
+
+1. The storefront or checkout is not fully served over HTTPS.
+2. A web server, CDN, or security module sends its own
+   `Content-Security-Policy` whose `frame-ancestors` excludes the BEMO origin.
+   Every CSP header is enforced, so that policy must include the BEMO origin
+   too.
+3. Something rewrites or strips the module's `Set-Cookie` changes after
+   PrestaShop sends them.
+4. A payment provider, 3-D Secure challenge, or browser privacy policy needs
+   top-level navigation. BEMO always offers **Open in new tab** for this.
+
+Inspect the headers BEMO sees (replace the URL with the real cart URL):
 
 ```bash
-curl -sSI https://shop.example/checkout \
+curl -sSI \
+  -H 'Sec-Fetch-Dest: iframe' \
+  -H 'Sec-Fetch-Mode: navigate' \
+  -H 'Sec-Fetch-Site: cross-site' \
+  'https://shop.example/index.php?controller=cart&action=show' \
   | grep -Ei 'x-frame-options|content-security-policy|set-cookie'
 ```
 
-There must be no blocking `X-Frame-Options`; any `frame-ancestors` directive
-must include the BEMO origin; and the PrestaShop session and cart cookies must
-be `Secure` with `SameSite=None; Partitioned`. PrestaShop 8 does not emit the
-`Partitioned` attribute itself on PHP 8.1, so configure it at the host, reverse
-proxy, or CDN for secure storefront cookies. The merchant's PrestaShop/payment
-provider remains the checkout and payment processor. Payment details are
-submitted directly to the shop or its payment provider; BEMO's servers do not
-process or store those details in this flow.
+Every `frame-ancestors` directive must include the BEMO origin, and the
+PrestaShop session cookie must be `Secure; SameSite=None; Partitioned`. The
+merchant's PrestaShop and payment provider remain the checkout and payment
+processor. Payment details go directly to the shop or its payment provider;
+BEMO's servers do not process or store them in this flow.
 
-### Merchant handoff checklist
+### Merchant checklist
 
-Ask the merchant or hosting provider to complete these steps on a staging copy
-before BEMO enables embedded checkout on the live shop:
-
-1. Install or upgrade **BEMO Live Shopping 0.7.0 or newer**. Use the archive
+1. Install or upgrade **BEMO Live Shopping 0.9.0 or newer**. Use the archive
    whose filename matches the BEMO environment. No PrestaShop cron module is
    required.
-2. Enable HTTPS for the entire storefront, including cart, checkout, payment,
+2. Serve the entire storefront over HTTPS, including cart, checkout, payment,
    return, and confirmation pages.
-3. Set **Cookie SameSite** to **None** under **Advanced Parameters →
-   Administration**. At the host, reverse proxy, or CDN, append `Partitioned`
-   to the secure PrestaShop session and cart cookies. Confirm the resulting
-   cookies are marked `Secure; SameSite=None; Partitioned`.
-4. Ask the host, CDN, theme, and checkout/payment-module owners to allow the
-   exact BEMO origin in every framed response. Remove blocking
-   `X-Frame-Options`; when CSP is used, include the BEMO origin in
-   `frame-ancestors`.
-5. Re-pair the shop from the BEMO module configuration page after those
-   settings are live. Select **Yes** for **Show checkout inside BEMO** only
-   after the header and cookie checks pass. BEMO enables it only after the
-   staging review is recorded by an admin.
-6. From a legitimate viewer account, test one highlighted product and finish
+3. Select **Yes** for **Show checkout inside BEMO** in the module settings.
+4. Open BEMO **Settings → Integrations**. If embedded checkout is not
+   available, follow the listed fix or send the developer details to the host.
+5. From a legitimate viewer account, test one highlighted product and finish
    a sandbox order in the BEMO dialog and with **Open in new tab**, for every
    enabled payment method and 3-D Secure flow.
 

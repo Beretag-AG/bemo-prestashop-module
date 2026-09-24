@@ -14,7 +14,7 @@ class UpgradeReleaseCoverageTest extends TestCase
         preg_match("/const VERSION = '([^']+)';/", $moduleSource, $versionMatch);
         $releaseVersion = $versionMatch[1];
 
-        self::assertSame('0.8.7', $releaseVersion);
+        self::assertSame('0.9.0', $releaseVersion);
         self::assertStringContainsString(
             '<version><![CDATA[' . $releaseVersion . ']]></version>',
             file_get_contents($root . '/config.xml')
@@ -40,7 +40,7 @@ class UpgradeReleaseCoverageTest extends TestCase
             self::assertTrue(call_user_func($upgradeFunction, $module));
         }
 
-        self::assertSame(array('0.8.3', '0.8.5', '0.8.6'), $module->versions);
+        self::assertSame(array('0.8.3', '0.8.5', '0.8.6', '0.9.0'), $module->versions);
         self::assertSame($releaseVersion, $this->upgradeVersion(end($upgradeFiles)));
     }
 
@@ -73,6 +73,13 @@ class ReleaseUpgradeModule
     public function upgradeToVersion085()
     {
         $this->versions[] = '0.8.5';
+
+        return true;
+    }
+
+    public function upgradeToVersion090()
+    {
+        $this->versions[] = '0.9.0';
 
         return true;
     }

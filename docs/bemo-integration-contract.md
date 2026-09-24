@@ -49,8 +49,10 @@ or optional-capability work. They do not block this module foundation.
   at-least-once and BEMO ingestion is idempotent. BEMO's recurring catalog read
   remains the correctness path when no local delivery runner is configured.
 - Link-out checkout is the baseline purchase mode. Embedding is optional: the
-  module requests it, then a BEMO admin records approval after separate browser
-  and merchant acceptance tests.
+  module requests it and, from 0.9.0, sends the framing and framed-cookie
+  headers itself. BEMO then loads the buy route and native cart as a
+  cross-site frame request and embeds only when every framing and cookie
+  check passes.
 
 ## Signed cart contract
 
