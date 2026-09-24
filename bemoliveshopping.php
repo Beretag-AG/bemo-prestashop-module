@@ -15,6 +15,7 @@ require_once __DIR__ . '/config/autoload.php';
 use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
 use Bemo\LiveShopping\Checkout\DbBuyLinkNonceRepository;
 use Bemo\LiveShopping\Checkout\CheckoutReadyBridge;
+use Bemo\LiveShopping\Checkout\EmbeddedCheckoutHeaders;
 use Bemo\LiveShopping\Installation\Installer;
 use Bemo\LiveShopping\Installation\InstalledVersionReconciler;
 use Bemo\LiveShopping\Installation\ModuleUpgradeRecovery;
@@ -41,7 +42,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.8.7';
+    const VERSION = '0.9.0';
     const CRON_CONTROLLER = 'cron';
     const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
@@ -177,6 +178,11 @@ class Bemoliveshopping extends Module
     public function upgradeToVersion086()
     {
         return true;
+    }
+
+    public function upgradeToVersion090()
+    {
+        return $this->registerBemoHooks();
     }
 
     public function getContent()
@@ -386,6 +392,57 @@ class Bemoliveshopping extends Module
         return $this->drainWebhookOutbox();
     }
 
+    /**
+     * Sends the framing and cookie headers embedded checkout needs, so a
+     * merchant who opted in never has to change server settings. Storefront
+     * requests only; a failure here must never break the shop page.
+     */
+    public function hookActionDispatcher($params)
+    {
+        if (!isset($params['controller_type'])
+            || (int) $params['controller_type'] !== Dispatcher::FC_FRONT
+            || headers_sent()) {
+            return;
+        }
+
+        try {
+            $shopId = isset($this->context->shop->id) ? (int) $this->context->shop->id : 0;
+            $repository = new DbConfigurationRepository(Db::getInstance());
+            if (!$repository->isEmbeddedCheckoutRequested($shopId)) {
+                return;
+            }
+            $headers = new EmbeddedCheckoutHeaders();
+            $policy = $headers->frameAncestorsPolicy(
+                (new CheckoutReadyBridge())->parentOrigin($this->checkoutFrameAppBaseUrl($repository, $shopId))
+            );
+            if ($policy === null) {
+                return;
+            }
+            header('Content-Security-Policy: ' . $policy, false);
+
+            if (!Tools::usingSecureMode() || !$headers->isCrossSiteFrameRequest($_SERVER)) {
+                return;
+            }
+            // PrestaShop writes its cookie with setcookie() during the request,
+            // so the rewrite has to happen just before headers are sent.
+            header_register_callback(function () use ($headers) {
+                $cookies = $headers->framedSetCookieHeaders(headers_list());
+                if ($cookies === null) {
+                    return;
+                }
+                header_remove('Set-Cookie');
+                foreach ($cookies as $cookie) {
+                    header('Set-Cookie: ' . $cookie, false);
+                }
+            });
+        } catch (Throwable $error) {
+            PrestaShopLogger::addLog(
+                'BEMO embedded checkout headers failed: ' . $error->getMessage(),
+                2
+            );
+        }
+    }
+
     public function hookDisplayFooter()
     {
         $requestToken = Tools::getValue(CheckoutReadyBridge::QUERY_NAME);
@@ -402,9 +459,10 @@ class Bemoliveshopping extends Module
         }
 
         $shopId = isset($this->context->shop->id) ? (int) $this->context->shop->id : 0;
-        $parentOrigin = $bridge->parentOrigin(
-            (new DbConfigurationRepository(Db::getInstance()))->getAppBaseUrl($shopId)
-        );
+        $parentOrigin = $bridge->parentOrigin($this->checkoutFrameAppBaseUrl(
+            new DbConfigurationRepository(Db::getInstance()),
+            $shopId
+        ));
 
         return $parentOrigin === null ? '' : $bridge->messageScript($parentOrigin);
     }
@@ -1112,6 +1170,15 @@ class Bemoliveshopping extends Module
         );
     }
 
+    private function checkoutFrameAppBaseUrl(DbConfigurationRepository $repository, $shopId)
+    {
+        return (new EndpointPolicy(
+            new EndpointNormalizer(),
+            $this->isDeveloperMode(),
+            BEMO_DISTRIBUTION_ENVIRONMENT
+        ))->checkoutFrameAppBaseUrl($repository->getAppBaseUrl($shopId));
+    }
+
     private function isDeveloperMode()
     {
         return defined('_PS_MODE_DEV_') && _PS_MODE_DEV_ === true;
@@ -1131,6 +1198,7 @@ class Bemoliveshopping extends Module
             'actionObjectCartRuleUpdateAfter',
             'actionObjectCartRuleDeleteAfter',
             'actionCronJob',
+            'actionDispatcher',
             'displayFooter',
         );
 

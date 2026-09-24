@@ -58,6 +58,22 @@ class EndpointPolicy
             : array(self::PRODUCTION_API_BASE_URL, self::PRODUCTION_APP_BASE_URL);
     }
 
+    /**
+     * The BEMO app allowed to frame this shop's checkout. A release build is
+     * pinned to its own environment, so a staging archive only admits BEMO
+     * staging and a production archive only admits production, whatever was
+     * stored earlier. Developer mode keeps the custom app URL it paired with.
+     */
+    public function checkoutFrameAppBaseUrl($pairedAppBaseUrl)
+    {
+        if ($this->developerMode) {
+            return $this->normalizer->normalizeBaseUrl($pairedAppBaseUrl);
+        }
+        $official = $this->officialPair();
+
+        return $official[1];
+    }
+
     public function isDeveloperMode()
     {
         return $this->developerMode;
