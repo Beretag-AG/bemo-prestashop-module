@@ -42,7 +42,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.9.0';
+    const VERSION = '0.9.1';
     const CRON_CONTROLLER = 'cron';
     const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
@@ -183,6 +183,11 @@ class Bemoliveshopping extends Module
     public function upgradeToVersion090()
     {
         return $this->registerBemoHooks();
+    }
+
+    public function upgradeToVersion091()
+    {
+        return true;
     }
 
     public function getContent()
@@ -420,13 +425,14 @@ class Bemoliveshopping extends Module
             }
             header('Content-Security-Policy: ' . $policy, false);
 
-            if (!Tools::usingSecureMode() || !$headers->isCrossSiteFrameRequest($_SERVER)) {
+            if (!Tools::usingSecureMode() || !$headers->isFramedCheckoutRequest($_SERVER, $_COOKIE)) {
                 return;
             }
+            $withFrameMarker = $headers->isCrossSiteFrameRequest($_SERVER);
             // PrestaShop writes its cookie with setcookie() during the request,
             // so the rewrite has to happen just before headers are sent.
-            header_register_callback(function () use ($headers) {
-                $cookies = $headers->framedSetCookieHeaders(headers_list());
+            header_register_callback(function () use ($headers, $withFrameMarker) {
+                $cookies = $headers->framedSetCookieHeaders(headers_list(), $withFrameMarker);
                 if ($cookies === null) {
                     return;
                 }

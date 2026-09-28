@@ -161,11 +161,15 @@ server changes:
   admits only `https://bemo.now`, the staging archive only
   `https://beta.bemo.now`. PrestaShop developer mode uses the custom app URL
   it paired with.
-- Only for requests the browser marks as a cross-site frame
-  (`Sec-Fetch-Dest: iframe`, `Sec-Fetch-Site: cross-site`) over HTTPS, it
-  sends the PrestaShop session cookie with `Secure; SameSite=None;
-  Partitioned`. That cookie lives in its own browser partition, so normal
-  visits to the shop keep their existing cookie.
+- Inside BEMO's frame over HTTPS, it sends every cookie the shop sets with
+  `Secure; SameSite=None; Partitioned`. Framed cookies live in their own
+  browser partition, so normal visits to the shop keep their existing cookies.
+  The browser marks only the frame's first load as cross-site
+  (`Sec-Fetch-Dest: iframe`, `Sec-Fetch-Site: cross-site`). That load also
+  sets a partitioned `bemo_embedded_checkout` marker cookie, which only exists
+  inside BEMO's frame. From 0.9.1, later clicks, form posts, and AJAX calls
+  that carry the marker get the same treatment, so login, guest checkout, and
+  payment modules keep their session state inside the frame.
 
 Both only apply after the merchant opts in. BEMO re-checks the shop at
 pairing, after opt-in, daily, and whenever the creator presses **Sync now**.
@@ -196,15 +200,16 @@ curl -sSI \
   | grep -Ei 'x-frame-options|content-security-policy|set-cookie'
 ```
 
-Every `frame-ancestors` directive must include the BEMO origin, and the
-PrestaShop session cookie must be `Secure; SameSite=None; Partitioned`. The
+Every `frame-ancestors` directive must include the BEMO origin, and every
+`Set-Cookie` must be `Secure; SameSite=None; Partitioned`, including the
+`bemo_embedded_checkout` marker. The
 merchant's PrestaShop and payment provider remain the checkout and payment
 processor. Payment details go directly to the shop or its payment provider;
 BEMO's servers do not process or store them in this flow.
 
 ### Merchant checklist
 
-1. Install or upgrade **BEMO Live Shopping 0.9.0 or newer**. Use the archive
+1. Install or upgrade **BEMO Live Shopping 0.9.1 or newer**. Use the archive
    whose filename matches the BEMO environment. No PrestaShop cron module is
    required.
 2. Serve the entire storefront over HTTPS, including cart, checkout, payment,
