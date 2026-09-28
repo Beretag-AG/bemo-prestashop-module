@@ -52,7 +52,10 @@ or optional-capability work. They do not block this module foundation.
   module requests it and, from 0.9.0, sends the framing and framed-cookie
   headers itself. BEMO then loads the buy route and native cart as a
   cross-site frame request and embeds only when every framing and cookie
-  check passes.
+  check passes. From 0.9.1 the module also treats later same-origin requests
+  inside the frame as framed when they carry its partitioned
+  `bemo_embedded_checkout` marker, so session updates made inside the frame
+  are kept.
 
 ## Signed cart contract
 
