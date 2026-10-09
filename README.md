@@ -171,7 +171,15 @@ server changes:
   that carry the marker get the same treatment, so login, guest checkout, and
   payment modules keep their session state inside the frame.
 
-Both only apply after the merchant opts in. BEMO re-checks the shop at
+From 0.9.2, on those HTTPS framed requests, the module also sets
+`window.cmp_stayiniframe = 1` immediately before a Consentmanager script
+loaded from `consentmanager.net` or its subdomains. This follows
+[Consentmanager's iframe configuration](https://www.consentmanager.net/en/help/developer-reference/client-side-configuration-options/)
+and keeps its consent layer inside the shop's frame. The module preserves
+the loader and its CSP nonce, leaves consent choices and automatic blocking
+in place, and makes no change on normal top-level visits.
+
+These changes only apply after the merchant opts in. BEMO re-checks the shop at
 pairing, after opt-in, daily, and whenever the creator presses **Sync now**.
 When something still blocks it, BEMO's shop settings show the reason in plain
 language plus a copyable brief for the merchant's developer or hosting
@@ -188,6 +196,13 @@ What can still block embedded checkout, and needs the host or developer:
    PrestaShop sends them.
 4. A payment provider, 3-D Secure challenge, or browser privacy policy needs
    top-level navigation. BEMO always offers **Open in new tab** for this.
+5. A consent manager uses JavaScript cookies or storage that the browser blocks
+   in a third-party frame. The module's cookie rewrite covers server-set
+   cookies only. Consentmanager loaders inserted dynamically by JavaScript,
+   served from a custom domain, or protected by a CSP that rejects the inline
+   configuration need the shop developer to place the iframe setting before
+   the loader. Keeping the consent layer inside the frame does not fix these
+   storage restrictions.
 
 Inspect the headers BEMO sees (replace the URL with the real cart URL):
 
@@ -209,7 +224,7 @@ BEMO's servers do not process or store them in this flow.
 
 ### Merchant checklist
 
-1. Install or upgrade **BEMO Live Shopping 0.9.1 or newer**. Use the archive
+1. Install or upgrade **BEMO Live Shopping 0.9.2 or newer**. Use the archive
    whose filename matches the BEMO environment. No PrestaShop cron module is
    required.
 2. Serve the entire storefront over HTTPS, including cart, checkout, payment,
