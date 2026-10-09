@@ -16,6 +16,7 @@ use Bemo\LiveShopping\Configuration\DbConfigurationRepository;
 use Bemo\LiveShopping\Checkout\DbBuyLinkNonceRepository;
 use Bemo\LiveShopping\Checkout\CheckoutReadyBridge;
 use Bemo\LiveShopping\Checkout\EmbeddedCheckoutHeaders;
+use Bemo\LiveShopping\Checkout\EmbeddedConsentmanager;
 use Bemo\LiveShopping\Installation\Installer;
 use Bemo\LiveShopping\Installation\InstalledVersionReconciler;
 use Bemo\LiveShopping\Installation\ModuleUpgradeRecovery;
@@ -42,7 +43,7 @@ use Bemo\LiveShopping\Webhook\WebhookOutbox;
 
 class Bemoliveshopping extends Module
 {
-    const VERSION = '0.9.1';
+    const VERSION = '0.9.2';
     const CRON_CONTROLLER = 'cron';
     const DOCS_URL = 'https://github.com/Beretag-AG/bemo-prestashop-module#readme';
 
@@ -188,6 +189,11 @@ class Bemoliveshopping extends Module
     public function upgradeToVersion091()
     {
         return true;
+    }
+
+    public function upgradeToVersion092()
+    {
+        return $this->registerBemoHooks();
     }
 
     public function getContent()
@@ -444,6 +450,31 @@ class Bemoliveshopping extends Module
         } catch (Throwable $error) {
             PrestaShopLogger::addLog(
                 'BEMO embedded checkout headers failed: ' . $error->getMessage(),
+                2
+            );
+        }
+    }
+
+    public function hookActionOutputHTMLBefore($params)
+    {
+        if (!isset($params['html']) || !is_string($params['html'])
+            || !Tools::usingSecureMode()
+            || !(new EmbeddedCheckoutHeaders())->isFramedCheckoutRequest($_SERVER, $_COOKIE)) {
+            return;
+        }
+
+        try {
+            $shopId = isset($this->context->shop->id) ? (int) $this->context->shop->id : 0;
+            $repository = new DbConfigurationRepository(Db::getInstance());
+            if (!$repository->isEmbeddedCheckoutRequested($shopId)) {
+                return;
+            }
+            // A displayHeader hook can run after a theme's CMP loader. This
+            // final HTML hook places the setting immediately before that loader.
+            $params['html'] = (new EmbeddedConsentmanager())->configure($params['html']);
+        } catch (Throwable $error) {
+            PrestaShopLogger::addLog(
+                'BEMO embedded checkout consent configuration failed: ' . $error->getMessage(),
                 2
             );
         }
@@ -1205,6 +1236,7 @@ class Bemoliveshopping extends Module
             'actionObjectCartRuleDeleteAfter',
             'actionCronJob',
             'actionDispatcher',
+            'actionOutputHTMLBefore',
             'displayFooter',
         );
 
